@@ -1,3 +1,5 @@
+import Constants from "expo-constants";
+import { router } from "expo-router";
 import {
   ArrowRight,
   ChevronLeft,
@@ -17,7 +19,6 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import Constants from "expo-constants";
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 /**
@@ -260,11 +261,12 @@ export default function Onboarding() {
           </View>
         ) : (
           <View style={styles.finalActions}>
-            <TouchableOpacity style={styles.getStartedBtn}>
+            <TouchableOpacity style={styles.getStartedBtn} onPress={() => router.replace("./Auth/LoginScreen")}>
               <Text style={styles.getStartedText}>Get Started</Text>
               <Zap size={20} color="#FFF" fill="#FFF" />
             </TouchableOpacity>
             <TouchableOpacity>
+
               <Text style={styles.loginBtn}>I ALREADY HAVE AN ACCOUNT</Text>
             </TouchableOpacity>
           </View>

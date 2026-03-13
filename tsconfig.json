@@ -13,5 +13,5 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-, "app/Onboarding.jsx"  ]
+, "app/Onboarding.jsx", "app/Auth/ForgotPasswordScreen.tsx"  ]
 }
