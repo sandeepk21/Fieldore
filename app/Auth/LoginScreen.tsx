@@ -1,25 +1,25 @@
 import { router } from 'expo-router';
 import {
-    ArrowRight,
-    Chrome,
-    Eye,
-    EyeOff,
-    Lock,
-    Mail,
-    Zap
+  ArrowRight,
+  Chrome,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  Zap
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -101,7 +101,7 @@ const LoginScreen = () => {
             </View>
 
             {/* Login Button */}
-            <TouchableOpacity style={styles.loginButton} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.loginButton} activeOpacity={0.8} onPress={() => router.replace("../Screens/BusinessSetupScreen")}>
               <Text style={styles.loginButtonText}>Log In</Text>
               <ArrowRight size={20} color="white" strokeWidth={3} />
             </TouchableOpacity>

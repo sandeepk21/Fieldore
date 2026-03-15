@@ -1,29 +1,27 @@
-import { router } from 'expo-router';
 import {
-    ArrowRight,
-    Briefcase,
-    CheckCircle2,
-    ChevronDown,
-    Lock,
-    Mail,
-    Phone,
-    Zap
+  ArrowRight,
+  Briefcase,
+  CheckCircle2,
+  ChevronDown,
+  Lock,
+  Mail,
+  Phone,
+  Zap
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 const { width } = Dimensions.get('window');
 
 const SignUpScreen = () => {
@@ -141,7 +139,7 @@ const SignUpScreen = () => {
             </View>
 
             {/* Login Link */}
-            <TouchableOpacity style={styles.loginLinkWrapper} onPress={() => router.push("./LoginScreen")}>
+            <TouchableOpacity style={styles.loginLinkWrapper}>
               <Text style={styles.footerBaseText}>
                 Already using ProSaaS? <Text style={styles.blueLinkText}>Log In</Text>
               </Text>
