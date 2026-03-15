@@ -206,7 +206,7 @@ const Invoice: React.FC = () => {
       </ScrollView>
 
       {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9}>
+      <TouchableOpacity style={styles.fab} activeOpacity={0.9} onPress={()=>{router.push("../Screens/CreateInvoiceScreen")}}>
         <Plus size={24} color="white" strokeWidth={2.5} />
         <Text style={styles.fabText}>Create Invoice</Text>
       </TouchableOpacity>

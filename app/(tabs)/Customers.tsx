@@ -153,7 +153,7 @@ const Customers: React.FC = () => {
       </ScrollView>
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9}>
+      <TouchableOpacity style={styles.fab} activeOpacity={0.9} onPress={()=>{router.push("../Screens/AddClientScreen")}}>
         <UserPlus size={24} color="white" strokeWidth={2.5} />
         <Text style={styles.fabText}>Add Customer</Text>
       </TouchableOpacity>

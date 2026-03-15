@@ -195,7 +195,7 @@ const JobList: React.FC = () => {
       </ScrollView>
 
       {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9}>
+      <TouchableOpacity style={styles.fab} activeOpacity={0.9} onPress={()=>{router.push("../Screens/CreateJobScreen")}}>
         <Plus size={24} color="white" strokeWidth={2.5} />
         <Text style={styles.fabText}>Create Job</Text>
       </TouchableOpacity>
