@@ -1,29 +1,29 @@
-import { RegisterBusinessApi } from '@/src/services/authService';
-import { saveAuthData } from '@/src/utils/storage';
+import { useLoader } from '@/src/context/LoaderContext';
+import { getBusinessDetailsApi, RegisterBusinessApi } from '@/src/services/authService';
 import type { AxiosError } from 'axios';
 import { router } from 'expo-router';
 import {
-  ArrowRight,
-  Briefcase,
-  Building2,
-  ChevronDown,
-  LucideIcon,
-  MapPin,
-  Phone,
-  Zap,
+    ArrowRight,
+    Briefcase,
+    Building2,
+    ChevronDown,
+    LucideIcon,
+    MapPin,
+    Phone,
+    Zap,
 } from 'lucide-react-native';
 import React from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -104,12 +104,13 @@ const InputField: React.FC<InputFieldProps> = ({
   </View>
 );
 
-const BusinessSetupScreen: React.FC = () => {
+const BusinessUpdateScreen: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
   const [form, setForm] = React.useState<FormState>(initialForm);
   const [errors, setErrors] = React.useState<FormErrors>({});
   const [loading, setLoading] = React.useState(false);
 
+  const { showLoader, hideLoader } = useLoader();
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
     setErrors(prev => ({ ...prev, [key]: undefined }));
@@ -233,13 +234,10 @@ const BusinessSetupScreen: React.FC = () => {
           displayName: result?.data?.displayName,
           businessId: result?.data?.businessId,
         };
-        //await clearAuthData();
-        // ✅ Save to AsyncStorage
-        await saveAuthData(token??"", user);
         Alert.alert('Success', message, [
           {
             text: 'OK',
-            onPress: () => router.replace('../(tabs)/Dashboard'),
+            onPress: () => router.replace('../(tabs)/Settings'),
           },
         ]);
       } else {
@@ -261,7 +259,34 @@ const BusinessSetupScreen: React.FC = () => {
       setLoading(false);
     }
   };
+const loadBusiness = async () => {
+  try {
+    showLoader();
 
+    const data = await getBusinessDetailsApi();
+
+    setForm({
+      businessName: data.name || '',
+      tradeType: data.tradeType || 'Plumbing',
+      phone: data.phone || '',
+      addressLine1: data.address?.line1 || '',
+      addressLine2: data.address?.line2 || '',
+      city: data.address?.city || '',
+      stateOrProvince: data.address?.stateOrProvince || '',
+      postalCode: data.address?.postalCode || '',
+      country: data.address?.country || '',
+      timeZone: data.timeZone || getSystemTimeZone(),
+    });
+
+  } catch (error: any) {
+    Alert.alert('Error', error.message || 'Failed to load business');
+  } finally {
+    hideLoader();
+  }
+};
+React.useEffect(() => {
+  loadBusiness();
+}, []);
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -622,4 +647,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default BusinessSetupScreen;
+export default BusinessUpdateScreen;

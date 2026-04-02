@@ -1,26 +1,26 @@
 import { router } from 'expo-router';
 import {
-    AlertCircle,
-    CheckCircle2,
-    ChevronRight,
-    Clock,
-    DollarSign,
-    FileText,
-    MoreHorizontal,
-    Plus,
-    Search,
-    SlidersHorizontal
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  DollarSign,
+  FileText,
+  MoreHorizontal,
+  Plus,
+  Search,
+  SlidersHorizontal
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    Dimensions,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Dimensions,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 

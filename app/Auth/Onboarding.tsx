@@ -261,7 +261,7 @@ export default function Onboarding() {
           </View>
         ) : (
           <View style={styles.finalActions}>
-            <TouchableOpacity style={styles.getStartedBtn} onPress={() => router.replace("./Auth/LoginScreen")}>
+            <TouchableOpacity style={styles.getStartedBtn} onPress={() => router.push("./LoginScreen")}>
               <Text style={styles.getStartedText}>Get Started</Text>
               <Zap size={20} color="#FFF" fill="#FFF" />
             </TouchableOpacity>

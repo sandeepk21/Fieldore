@@ -1,3 +1,6 @@
+import { useLoader } from '@/src/context/LoaderContext';
+import { loginApi } from '@/src/services/authService';
+import { saveAuthData } from '@/src/utils/storage';
 import { router } from 'expo-router';
 import {
   ArrowRight,
@@ -22,22 +25,108 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 const { width, height } = Dimensions.get('window');
 
 const LoginScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { showLoader, hideLoader } = useLoader();
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+  const handleLogin = async () => {
+    debugger;
+    showLoader();
+    // 🔹 Trim inputs
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
 
+    // 🔹 Validation
+    if (!trimmedEmail) {
+      alert('Email is required');
+      hideLoader();
+      return;
+    }
+
+    if (!isValidEmail(trimmedEmail)) {
+      alert('Please enter a valid email');
+      hideLoader();
+      return;
+    }
+
+    if (!trimmedPassword) {
+      alert('Password is required');
+      hideLoader();
+      return;
+    }
+
+    if (trimmedPassword.length < 6) {
+      alert('Password must be at least 6 characters');
+      hideLoader();
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const result = await loginApi({
+        email: trimmedEmail,
+        password: trimmedPassword,
+      });
+
+      if (!result) {
+        throw new Error('Invalid server response');
+      }
+      hideLoader();
+      // 🔹 Extract data safely
+      const token = result?.token;
+      const user = {
+        userId: result?.userId,
+        email: result?.email,
+        firstName: result?.firstName,
+        lastName: result?.lastName,
+        displayName: result?.displayName,
+        businessId: result?.businessId,
+      };
+
+      if (!token) {
+        throw new Error('Authentication failed: No token received');
+      }
+
+      // ✅ Save to AsyncStorage
+      await saveAuthData(token, user);
+      console.log('✅ Login Success:', user);
+      if (user.businessId != null && user.businessId != "") {
+        router.replace("../(tabs)/Dashboard");
+      }
+      else {
+        // 🔹 Navigate
+        router.replace("../Screens/BusinessSetupScreen");
+      }
+
+    } catch (error: any) {
+      console.log('❌ Login Error:', error);
+
+      if (error.message.includes('Network')) {
+        alert('Network error. Please check your connection.');
+      } else {
+        alert(error.message || 'Login failed');
+      }
+    } finally {
+      hideLoader();
+      setLoading(false);
+    }
+  };
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -77,7 +166,7 @@ const LoginScreen = () => {
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.label}>Password</Text>
-                <TouchableOpacity onPress={()=> router.push("./ForgotPasswordScreen")}>
+                <TouchableOpacity onPress={() => router.push("./ForgotPasswordScreen")}>
                   <Text style={styles.forgotText}>Forgot?</Text>
                 </TouchableOpacity>
               </View>
@@ -91,7 +180,7 @@ const LoginScreen = () => {
                   value={password}
                   onChangeText={setPassword}
                 />
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.eyeIcon}
                 >
@@ -101,7 +190,7 @@ const LoginScreen = () => {
             </View>
 
             {/* Login Button */}
-            <TouchableOpacity style={styles.loginButton} activeOpacity={0.8} onPress={() => router.replace("../Screens/BusinessSetupScreen")}>
+            <TouchableOpacity style={styles.loginButton} activeOpacity={0.8} onPress={handleLogin}>
               <Text style={styles.loginButtonText}>Log In</Text>
               <ArrowRight size={20} color="white" strokeWidth={3} />
             </TouchableOpacity>

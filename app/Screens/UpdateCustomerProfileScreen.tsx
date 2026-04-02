@@ -1,11 +1,17 @@
 import {
   CountryLookupResponse,
-  CreateCustomerRequest,
-  getFieldoreAPI,
   StateProvinceLookupResponse,
+  UpdateCustomerRequest,
+  getFieldoreAPI,
 } from '@/src/api/generated';
 import { useLoader } from '@/src/context/LoaderContext';
-import { router } from 'expo-router';
+import {
+  getBillingCustomerAddress,
+  getCustomerByIdApi,
+  getPrimaryCustomerAddress,
+  updateCustomerApi,
+} from '@/src/services/customerService';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   Building2,
   Check,
@@ -36,6 +42,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const api = getFieldoreAPI();
 
 interface SectionProps {
   title: string;
@@ -229,7 +237,7 @@ const validateField = (
   }
 };
 
-const validateAddClientForm = (
+const validateForm = (
   data: FormData,
   customerType: CustomerType,
   sameAsService: boolean
@@ -266,6 +274,39 @@ const validateAddClientForm = (
   return {};
 };
 
+const mapCustomerToFormData = async (customerId: string) => {
+  const customer = await getCustomerByIdApi(customerId);
+  const serviceAddress = getPrimaryCustomerAddress(customer);
+  const billingAddress = getBillingCustomerAddress(customer);
+  const sameAsService = customer.billingSameAsService ?? true;
+
+  return {
+    customerType: customer.type === 'Commercial' ? 'Commercial' : 'Residential',
+    sameAsService,
+    formData: {
+      companyName: customer.companyName?.trim() || '',
+      firstName: customer.firstName?.trim() || '',
+      lastName: customer.lastName?.trim() || '',
+      email: customer.email?.trim() || '',
+      mobilePhone: customer.mobilePhone?.trim() || '',
+      alternatePhone: customer.alternatePhone?.trim() || '',
+      serviceAddress: serviceAddress?.line1?.trim() || '',
+      serviceCity: serviceAddress?.city?.trim() || '',
+      serviceZipCode: serviceAddress?.postalCode?.trim() || '',
+      serviceCountryCode: serviceAddress?.country?.trim() || '',
+      serviceStateCode: serviceAddress?.stateOrProvince?.trim() || '',
+      billingAddress: sameAsService ? '' : billingAddress?.line1?.trim() || '',
+      billingCity: sameAsService ? '' : billingAddress?.city?.trim() || '',
+      billingZipCode: sameAsService ? '' : billingAddress?.postalCode?.trim() || '',
+      billingCountryCode: sameAsService ? '' : billingAddress?.country?.trim() || '',
+      billingStateCode: sameAsService ? '' : billingAddress?.stateOrProvince?.trim() || '',
+      gateCode: customer.gateCode?.trim() || '',
+      petsNote: customer.petsNote?.trim() || 'No pets',
+      internalNotes: customer.internalNotes?.trim() || '',
+    } satisfies FormData,
+  };
+};
+
 const Section: React.FC<SectionProps> = ({ title, accent, children }) => (
   <View style={styles.sectionCard}>
     <View style={styles.sectionHeader}>
@@ -274,6 +315,99 @@ const Section: React.FC<SectionProps> = ({ title, accent, children }) => (
     </View>
     {children}
   </View>
+);
+
+const SkeletonBlock = ({
+  height,
+  width,
+  style,
+}: {
+  height: number;
+  width: number | `${number}%`;
+  style?: object;
+}) => <View style={[styles.skeletonBlock, { height, width }, style]} />;
+
+const SkeletonInput = ({ half }: { half?: boolean }) => (
+  <View style={[styles.inputGroup, half && { flex: 1 }]}>
+    <SkeletonBlock height={10} width="38%" style={{ marginLeft: 4 }} />
+    <SkeletonBlock height={48} width="100%" />
+  </View>
+);
+
+const SkeletonSection = ({
+  titleWidth,
+  rows = 2,
+  hasDoubleRow,
+  multiline,
+}: {
+  titleWidth: number | `${number}%`;
+  rows?: number;
+  hasDoubleRow?: boolean;
+  multiline?: boolean;
+}) => (
+  <View style={styles.sectionCard}>
+    <View style={styles.sectionHeader}>
+      <View style={[styles.sectionIndicator, { backgroundColor: '#e2e8f0' }]} />
+      <SkeletonBlock height={12} width={titleWidth} />
+    </View>
+    {rows > 0
+      ? Array.from({ length: rows }).map((_, index) => <SkeletonInput key={index} />)
+      : null}
+    {hasDoubleRow ? (
+      <View style={styles.row}>
+        <SkeletonInput half />
+        <SkeletonInput half />
+      </View>
+    ) : null}
+    {multiline ? <SkeletonBlock height={100} width="100%" /> : null}
+  </View>
+);
+
+const UpdateCustomerProfileSkeleton = () => (
+  <SafeAreaView style={styles.container}>
+    <StatusBar barStyle="dark-content" />
+
+    <View style={styles.header}>
+      <View style={styles.closeBtn}>
+        <SkeletonBlock height={18} width={18} style={{ borderRadius: 9 }} />
+      </View>
+      <SkeletonBlock height={12} width={110} />
+      <View style={{ width: 40 }} />
+    </View>
+
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.typeSelector}>
+        <View style={[styles.typeBtn, styles.typeBtnActive]}>
+          <SkeletonBlock height={12} width={84} />
+        </View>
+        <View style={styles.typeBtn}>
+          <SkeletonBlock height={12} width={84} />
+        </View>
+      </View>
+
+      <View style={styles.formContent}>
+        <SkeletonSection titleWidth={120} hasDoubleRow rows={1} />
+        <SkeletonSection titleWidth={128} rows={1} hasDoubleRow />
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <View style={[styles.sectionIndicator, { backgroundColor: '#e2e8f0' }]} />
+            <SkeletonBlock height={12} width={132} />
+          </View>
+          <View style={styles.row}>
+            <SkeletonInput half />
+            <SkeletonInput half />
+          </View>
+          <SkeletonBlock height={100} width="100%" />
+        </View>
+      </View>
+    </ScrollView>
+
+    <View style={styles.footer}>
+      <View style={[styles.saveBtn, styles.saveBtnDisabled]}>
+        <SkeletonBlock height={18} width={140} style={{ backgroundColor: 'rgba(255,255,255,0.45)' }} />
+      </View>
+    </View>
+  </SafeAreaView>
 );
 
 const InputField: React.FC<InputFieldProps> = ({
@@ -370,9 +504,10 @@ const SelectField: React.FC<SelectFieldProps> = ({
   </View>
 );
 
-const AddClientScreen: React.FC = () => {
-  const api = getFieldoreAPI();
+const UpdateCustomerProfileScreen: React.FC = () => {
   const { showLoader, hideLoader } = useLoader();
+  const params = useLocalSearchParams<{ customerId?: string }>();
+  const customerId = typeof params.customerId === 'string' ? params.customerId : '';
   const [customerType, setCustomerType] = useState<CustomerType>('Residential');
   const [sameAsService, setSameAsService] = useState(true);
   const [showPetOptions, setShowPetOptions] = useState(false);
@@ -381,6 +516,7 @@ const AddClientScreen: React.FC = () => {
   const [showBillingCountryOptions, setShowBillingCountryOptions] = useState(false);
   const [showBillingStateOptions, setShowBillingStateOptions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingScreen, setIsLoadingScreen] = useState(true);
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
   const [isLoadingServiceStates, setIsLoadingServiceStates] = useState(false);
   const [isLoadingBillingStates, setIsLoadingBillingStates] = useState(false);
@@ -417,37 +553,51 @@ const AddClientScreen: React.FC = () => {
     .filter(option => option.value);
 
   const formIsValid = useMemo(
-    () => Object.keys(validateAddClientForm(formData, customerType, sameAsService)).length === 0,
+    () => Object.keys(validateForm(formData, customerType, sameAsService)).length === 0,
     [formData, customerType, sameAsService]
   );
 
   useEffect(() => {
-    const fetchCountries = async () => {
-      debugger;
+    const loadScreen = async () => {
+      if (!customerId) {
+        setErrors({ server: 'Customer id is missing.' });
+        setIsLoadingScreen(false);
+        return;
+      }
+
+      setIsLoadingScreen(true);
       setIsLoadingCountries(true);
 
       try {
-        const response = await api.getApiLocationsCountries();
-        debugger;
-        const result = response.data;
+        const [customerResult, countriesResponse] = await Promise.all([
+          mapCustomerToFormData(customerId),
+          api.getApiLocationsCountries(),
+        ]);
 
-        if (!result.success) {
-          throw new Error(result.message || 'Failed to load countries');
+        if (!countriesResponse.data.success) {
+          throw new Error(countriesResponse.data.message || 'Failed to load countries');
         }
 
-        setCountries(result.data || []);
+        setCustomerType(customerResult.customerType as CustomerType);
+        setSameAsService(customerResult.sameAsService);
+        setFormData(customerResult.formData);
+        setCountries(countriesResponse.data.data || []);
+        setErrors({});
       } catch (error: any) {
-        setErrors(current => ({
-          ...current,
-          server: error?.response?.data?.message || error?.message || 'Failed to load countries.',
-        }));
+        setErrors({
+          server:
+            error?.response?.data?.message ||
+            error?.message ||
+            'Failed to load customer details.',
+        });
       } finally {
         setIsLoadingCountries(false);
+        setIsLoadingScreen(false);
       }
     };
 
-    fetchCountries();
-  }, []);
+    loadScreen();
+  }, [customerId]);
 
   useEffect(() => {
     const fetchStates = async () => {
@@ -563,10 +713,20 @@ const AddClientScreen: React.FC = () => {
         delete nextErrors.billingStateCode;
         return nextErrors;
       });
+      return;
     }
+
+    setFormData(current => ({
+      ...current,
+      billingAddress: current.billingAddress || current.serviceAddress,
+      billingCity: current.billingCity || current.serviceCity,
+      billingZipCode: current.billingZipCode || current.serviceZipCode,
+      billingCountryCode: current.billingCountryCode || current.serviceCountryCode,
+      billingStateCode: current.billingStateCode || current.serviceStateCode,
+    }));
   };
 
-  const buildPayload = (): CreateCustomerRequest => {
+  const buildPayload = (): UpdateCustomerRequest => {
     const serviceAddress = {
       label: 'Service',
       isPrimary: true,
@@ -608,7 +768,12 @@ const AddClientScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    const validationErrors = validateAddClientForm(formData, customerType, sameAsService);
+    if (!customerId) {
+      setErrors({ server: 'Customer id is missing.' });
+      return;
+    }
+
+    const validationErrors = validateForm(formData, customerType, sameAsService);
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -620,19 +785,14 @@ const AddClientScreen: React.FC = () => {
     showLoader();
 
     try {
-      const response = await api.postApiCustomersCreateCustomer(buildPayload());
-
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'Failed to create customer');
-      }
-
-      Alert.alert('Success', 'Customer created successfully.');
+      await updateCustomerApi(customerId, buildPayload());
+      Alert.alert('Success', 'Customer updated successfully.');
       router.back();
     } catch (error: any) {
       const validationErrors = error?.response?.data?.errors;
       const message = validationErrors
         ? Object.values(validationErrors).flat().join('\n')
-        : error?.response?.data?.message || error?.message || 'Failed to create customer. Please try again.';
+        : error?.response?.data?.message || error?.message || 'Failed to update customer.';
 
       setErrors({ server: message });
     } finally {
@@ -640,6 +800,10 @@ const AddClientScreen: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoadingScreen) {
+    return <UpdateCustomerProfileSkeleton />;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -649,7 +813,7 @@ const AddClientScreen: React.FC = () => {
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
           <X size={20} color="#94a3b8" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>ADD NEW CLIENT</Text>
+        <Text style={styles.headerTitle}>UPDATE CLIENT</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -1053,7 +1217,7 @@ const AddClientScreen: React.FC = () => {
               <ActivityIndicator size="small" color="white" />
             ) : (
               <>
-                <Text style={styles.saveBtnText}>Save Customer</Text>
+                <Text style={styles.saveBtnText}>Update Customer</Text>
                 <Check size={22} color="white" strokeWidth={3} />
               </>
             )}
@@ -1066,6 +1230,9 @@ const AddClientScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
+  skeletonBlock: { backgroundColor: '#e2e8f0', borderRadius: 12 },
+  centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
+  centerText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1217,4 +1384,4 @@ const styles = StyleSheet.create({
   serverErrorText: { color: '#b91c1c', fontSize: 13, fontWeight: '700' },
 });
 
-export default AddClientScreen;
+export default UpdateCustomerProfileScreen;

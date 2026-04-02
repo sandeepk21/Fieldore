@@ -1,24 +1,24 @@
+import { router } from 'expo-router';
 import {
-    Bell,
-    Briefcase,
-    Building2,
-    ChevronRight,
-    CreditCard,
-    LogOut,
-    LucideIcon,
-    Settings as SettingsIcon,
-    ShieldCheck,
-    Users,
-    Zap,
+  Bell,
+  Briefcase,
+  ChevronRight,
+  CreditCard,
+  LogOut,
+  LucideIcon,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  Users,
+  Zap
 } from 'lucide-react-native';
 import React from 'react';
 import {
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -40,7 +40,6 @@ const Settings: React.FC = () => {
     {
       label: "BUSINESS & TEAM",
       items: [
-        { id: 'profile', icon: Building2, label: "Business Profile", desc: "Manage logo, name, and address" },
         { id: 'users', icon: Users, label: "Users & Team", desc: "Manage permissions and staff" },
         { id: 'services', icon: Briefcase, label: "Services", desc: "Your trade categories and rates" },
       ]
@@ -77,7 +76,7 @@ const Settings: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
       >
         {/* User Profile Summary Card */}
-        <TouchableOpacity style={styles.profileCard} activeOpacity={0.9}>
+        <TouchableOpacity style={styles.profileCard} activeOpacity={0.9} onPress={()=>{router.push("../Screens/BusinessUpdateScreen")}}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>AT</Text>
           </View>

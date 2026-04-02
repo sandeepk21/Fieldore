@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import {
   Bell,
   Calendar,
@@ -146,7 +147,7 @@ const Dashboard: React.FC = () => {
       </ScrollView>
 
       {/* Floating Action Button - Lowered slightly since Nav is gone */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9}>
+      <TouchableOpacity style={styles.fab} activeOpacity={0.9} onPress={()=>{router.push("../Screens/CreateJobScreen")}}>
         <Plus size={32} color="white" strokeWidth={2.5} />
       </TouchableOpacity>
     </SafeAreaView>

@@ -1,5 +1,8 @@
+import { LoaderProvider } from "@/src/context/LoaderContext";
 import { Stack } from "expo-router";
 
+
 export default function Layout() {
-  return <Stack screenOptions={{ headerShown:false }} />;
+  
+  return (<LoaderProvider><Stack screenOptions={{ headerShown:false }} /></LoaderProvider>);
 }
