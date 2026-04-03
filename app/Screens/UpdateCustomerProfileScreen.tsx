@@ -26,12 +26,14 @@ import {
   User,
   X,
 } from 'lucide-react-native';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -70,23 +72,20 @@ interface SelectOption {
   value: string;
 }
 
-interface SelectFieldProps {
+interface TriggerFieldProps {
   label: string;
   icon: LucideIcon;
   value: string;
   error?: string;
   required?: boolean;
-  isOpen?: boolean;
-  options: SelectOption[];
   onPress: () => void;
-  onSelect: (value: string) => void;
   placeholder: string;
   disabled?: boolean;
   loading?: boolean;
-  zIndex?: number;
 }
 
 type CustomerType = 'Residential' | 'Commercial';
+type ActiveSheet = 'pet' | 'serviceCountry' | 'serviceState' | 'billingCountry' | 'billingState' | null;
 
 type FormData = {
   companyName: string;
@@ -350,9 +349,7 @@ const SkeletonSection = ({
       <View style={[styles.sectionIndicator, { backgroundColor: '#e2e8f0' }]} />
       <SkeletonBlock height={12} width={titleWidth} />
     </View>
-    {rows > 0
-      ? Array.from({ length: rows }).map((_, index) => <SkeletonInput key={index} />)
-      : null}
+    {rows > 0 ? Array.from({ length: rows }).map((_, index) => <SkeletonInput key={index} />) : null}
     {hasDoubleRow ? (
       <View style={styles.row}>
         <SkeletonInput half />
@@ -366,7 +363,6 @@ const SkeletonSection = ({
 const UpdateCustomerProfileSkeleton = () => (
   <SafeAreaView style={styles.container}>
     <StatusBar barStyle="dark-content" />
-
     <View style={styles.header}>
       <View style={styles.closeBtn}>
         <SkeletonBlock height={18} width={18} style={{ borderRadius: 9 }} />
@@ -374,7 +370,6 @@ const UpdateCustomerProfileSkeleton = () => (
       <SkeletonBlock height={12} width={110} />
       <View style={{ width: 40 }} />
     </View>
-
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
       <View style={styles.typeSelector}>
         <View style={[styles.typeBtn, styles.typeBtnActive]}>
@@ -384,7 +379,6 @@ const UpdateCustomerProfileSkeleton = () => (
           <SkeletonBlock height={12} width={84} />
         </View>
       </View>
-
       <View style={styles.formContent}>
         <SkeletonSection titleWidth={120} hasDoubleRow rows={1} />
         <SkeletonSection titleWidth={128} rows={1} hasDoubleRow />
@@ -401,7 +395,6 @@ const UpdateCustomerProfileSkeleton = () => (
         </View>
       </View>
     </ScrollView>
-
     <View style={styles.footer}>
       <View style={[styles.saveBtn, styles.saveBtnDisabled]}>
         <SkeletonBlock height={18} width={140} style={{ backgroundColor: 'rgba(255,255,255,0.45)' }} />
@@ -426,10 +419,10 @@ const InputField: React.FC<InputFieldProps> = ({
   <View style={styles.inputGroup}>
     <View style={styles.labelRow}>
       <Text style={styles.label}>{label}</Text>
-      {required && <View style={styles.requiredDot} />}
+      {required ? <View style={styles.requiredDot} /> : null}
     </View>
     <View style={[styles.inputWrapper, multiline && styles.textAreaWrapper, error && styles.inputWrapperError]}>
-      {Icon && <Icon size={16} color="#cbd5e1" style={multiline ? styles.iconTop : styles.iconCenter} />}
+      {Icon ? <Icon size={16} color="#cbd5e1" style={multiline ? styles.iconTop : styles.iconCenter} /> : null}
       <TextInput
         style={[styles.textInput, multiline && styles.textArea, !Icon && { paddingLeft: 16 }]}
         placeholder={placeholder}
@@ -446,62 +439,64 @@ const InputField: React.FC<InputFieldProps> = ({
   </View>
 );
 
-const SelectField: React.FC<SelectFieldProps> = ({
+const TriggerField: React.FC<TriggerFieldProps> = ({
   label,
   icon: Icon,
   value,
   error,
   required,
-  isOpen,
-  options,
   onPress,
-  onSelect,
   placeholder,
   disabled,
   loading,
-  zIndex = 1,
 }) => (
-  <View style={[styles.inputGroup, styles.selectGroup, { zIndex }]}>
+  <View style={styles.inputGroup}>
     <View style={styles.labelRow}>
       <Text style={styles.label}>{label}</Text>
-      {required && <View style={styles.requiredDot} />}
+      {required ? <View style={styles.requiredDot} /> : null}
     </View>
-    <View style={styles.selectLayer}>
-      <TouchableOpacity
-        style={[styles.inputWrapper, error && styles.inputWrapperError, disabled && styles.inputWrapperDisabled]}
-        activeOpacity={0.7}
-        onPress={onPress}
-        disabled={disabled}
-      >
-        <Icon size={16} color="#cbd5e1" style={styles.iconCenter} />
-        <Text style={[styles.selectText, !value && styles.placeholderText]}>
-          {loading ? 'Loading...' : value || placeholder}
-        </Text>
-        <ChevronDown size={16} color="#94a3b8" style={[styles.chevronIcon, isOpen && styles.chevronIconOpen]} />
-      </TouchableOpacity>
-
-      {isOpen && (
-        <View style={styles.selectDropdownOverlay}>
-          <ScrollView nestedScrollEnabled style={styles.selectDropdownScroll} showsVerticalScrollIndicator={false}>
-            {options.map(option => (
-              <TouchableOpacity
-                key={option.value}
-                activeOpacity={0.8}
-                style={[styles.optionItem, value === option.label && styles.optionItemSelected]}
-                onPress={() => onSelect(option.value)}
-              >
-                <Text style={[styles.optionText, value === option.label && styles.optionTextSelected]}>
-                  {option.label}
-                </Text>
-                {value === option.label && <Check size={16} color="#2563eb" strokeWidth={3} />}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
+    <TouchableOpacity
+      style={[styles.inputWrapper, error && styles.inputWrapperError, disabled && styles.inputWrapperDisabled]}
+      activeOpacity={0.8}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Icon size={16} color="#cbd5e1" style={styles.iconCenter} />
+      <Text style={[styles.selectText, !value && styles.placeholderText]}>
+        {loading ? 'Loading...' : value || placeholder}
+      </Text>
+      <ChevronDown size={16} color="#94a3b8" />
+    </TouchableOpacity>
     {!!error && <Text style={styles.errorText}>{error}</Text>}
   </View>
+);
+
+const BottomSheet = ({
+  visible,
+  onClose,
+  title,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <View style={styles.modalRoot}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <View style={styles.sheetCard}>
+        <View style={styles.sheetHandle} />
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>{title}</Text>
+          <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
+            <X size={18} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+        {children}
+      </View>
+    </View>
+  </Modal>
 );
 
 const UpdateCustomerProfileScreen: React.FC = () => {
@@ -510,11 +505,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
   const customerId = typeof params.customerId === 'string' ? params.customerId : '';
   const [customerType, setCustomerType] = useState<CustomerType>('Residential');
   const [sameAsService, setSameAsService] = useState(true);
-  const [showPetOptions, setShowPetOptions] = useState(false);
-  const [showServiceCountryOptions, setShowServiceCountryOptions] = useState(false);
-  const [showServiceStateOptions, setShowServiceStateOptions] = useState(false);
-  const [showBillingCountryOptions, setShowBillingCountryOptions] = useState(false);
-  const [showBillingStateOptions, setShowBillingStateOptions] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingScreen, setIsLoadingScreen] = useState(true);
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
@@ -585,10 +576,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
         setErrors({});
       } catch (error: any) {
         setErrors({
-          server:
-            error?.response?.data?.message ||
-            error?.message ||
-            'Failed to load customer details.',
+          server: error?.response?.data?.message || error?.message || 'Failed to load customer details.',
         });
       } finally {
         setIsLoadingCountries(false);
@@ -663,15 +651,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
     fetchStates();
   }, [formData.billingCountryCode, sameAsService]);
 
-  const closeAllDropdowns = () => {
-    setShowPetOptions(false);
-    setShowServiceCountryOptions(false);
-    setShowServiceStateOptions(false);
-    setShowBillingCountryOptions(false);
-    setShowBillingStateOptions(false);
-  };
-
-  const handleInputChange = (field: keyof FormData, value: string) => {
+  const handleInputChange = useCallback((field: keyof FormData, value: string) => {
     const nextValue =
       field === 'mobilePhone' || field === 'alternatePhone' ? normalizePhone(value) : value;
     const updatedData = { ...formData, [field]: nextValue };
@@ -688,7 +668,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
     if (errors[field] || errors.server) {
       setErrors({});
     }
-  };
+  }, [customerType, errors, formData, sameAsService]);
 
   const handleCustomerTypeChange = (type: CustomerType) => {
     setCustomerType(type);
@@ -701,7 +681,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
 
   const handleToggleSameAsService = (value: boolean) => {
     setSameAsService(value);
-    closeAllDropdowns();
+    setActiveSheet(null);
 
     if (value) {
       setErrors(currentErrors => {
@@ -801,6 +781,83 @@ const UpdateCustomerProfileScreen: React.FC = () => {
     }
   };
 
+  const sheetConfig = useMemo(() => {
+    switch (activeSheet) {
+      case 'serviceCountry':
+        return {
+          title: 'Select Country',
+          options: countryOptions.map(option => ({
+            ...option,
+            selected: formData.serviceCountryCode === option.value,
+            onSelect: () => {
+              setFormData(current => ({
+                ...current,
+                serviceCountryCode: option.value,
+                serviceStateCode: '',
+              }));
+              setErrors({});
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'serviceState':
+        return {
+          title: 'Select Province',
+          options: serviceStateOptions.map(option => ({
+            ...option,
+            selected: formData.serviceStateCode === option.value,
+            onSelect: () => {
+              handleInputChange('serviceStateCode', option.value);
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'billingCountry':
+        return {
+          title: 'Select Billing Country',
+          options: countryOptions.map(option => ({
+            ...option,
+            selected: formData.billingCountryCode === option.value,
+            onSelect: () => {
+              setFormData(current => ({
+                ...current,
+                billingCountryCode: option.value,
+                billingStateCode: '',
+              }));
+              setErrors({});
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'billingState':
+        return {
+          title: 'Select Billing Province',
+          options: billingStateOptions.map(option => ({
+            ...option,
+            selected: formData.billingStateCode === option.value,
+            onSelect: () => {
+              handleInputChange('billingStateCode', option.value);
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'pet':
+        return {
+          title: 'Select Pet Info',
+          options: PET_OPTIONS.map(option => ({
+            ...option,
+            selected: formData.petsNote === option.value,
+            onSelect: () => {
+              handleInputChange('petsNote', option.value);
+              setActiveSheet(null);
+            },
+          })),
+        };
+      default:
+        return null;
+    }
+  }, [activeSheet, billingStateOptions, countryOptions, formData, handleInputChange, serviceStateOptions]);
+
   if (isLoadingScreen) {
     return <UpdateCustomerProfileSkeleton />;
   }
@@ -817,393 +874,315 @@ const UpdateCustomerProfileScreen: React.FC = () => {
         <View style={{ width: 40 }} />
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity activeOpacity={1} onPress={closeAllDropdowns}>
-            <View style={styles.typeSelector}>
-              {(['Residential', 'Commercial'] as const).map(type => (
-                <TouchableOpacity
-                  key={type}
-                  onPress={() => handleCustomerTypeChange(type)}
-                  style={[styles.typeBtn, customerType === type && styles.typeBtnActive]}
-                >
-                  {type === 'Residential' ? (
-                    <User size={14} color={customerType === type ? '#2563eb' : '#94a3b8'} />
-                  ) : (
-                    <Building2 size={14} color={customerType === type ? '#2563eb' : '#94a3b8'} />
-                  )}
-                  <Text style={[styles.typeBtnText, customerType === type && styles.typeBtnTextActive]}>
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.formContent}>
-              {!!errors.server && (
-                <View style={styles.serverErrorBox}>
-                  <Text style={styles.serverErrorText}>{errors.server}</Text>
-                </View>
-              )}
-
-              <Section title="Primary Contact" accent="#2563eb">
-                {customerType === 'Commercial' && (
-                  <InputField
-                    label="Company Name"
-                    placeholder="e.g. Acme Corp"
-                    icon={Building2}
-                    required
-                    value={formData.companyName}
-                    onChangeText={(value) => handleInputChange('companyName', value)}
-                    error={errors.companyName}
-                  />
+          <View style={styles.typeSelector}>
+            {(['Residential', 'Commercial'] as const).map(type => (
+              <TouchableOpacity
+                key={type}
+                onPress={() => handleCustomerTypeChange(type)}
+                style={[styles.typeBtn, customerType === type && styles.typeBtnActive]}
+              >
+                {type === 'Residential' ? (
+                  <User size={14} color={customerType === type ? '#2563eb' : '#94a3b8'} />
+                ) : (
+                  <Building2 size={14} color={customerType === type ? '#2563eb' : '#94a3b8'} />
                 )}
+                <Text style={[styles.typeBtnText, customerType === type && styles.typeBtnTextActive]}>
+                  {type}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="First Name"
-                      placeholder="Jane"
-                      required
-                      value={formData.firstName}
-                      onChangeText={(value) => handleInputChange('firstName', value)}
-                      error={errors.firstName}
-                      autoCapitalize="words"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="Last Name"
-                      placeholder="Smith"
-                      required
-                      value={formData.lastName}
-                      onChangeText={(value) => handleInputChange('lastName', value)}
-                      error={errors.lastName}
-                      autoCapitalize="words"
-                    />
-                  </View>
-                </View>
+          <View style={styles.formContent}>
+            {!!errors.server && (
+              <View style={styles.serverErrorBox}>
+                <Text style={styles.serverErrorText}>{errors.server}</Text>
+              </View>
+            )}
 
+            <Section title="Primary Contact" accent="#2563eb">
+              {customerType === 'Commercial' ? (
                 <InputField
-                  label="Email Address"
-                  placeholder="jane@example.com"
-                  icon={Mail}
-                  keyboardType="email-address"
-                  value={formData.email}
-                  onChangeText={(value) => handleInputChange('email', value)}
-                  error={errors.email}
-                  autoCapitalize="none"
-                />
-
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="Mobile Phone"
-                      placeholder="(555) 000-0000"
-                      icon={Phone}
-                      keyboardType="phone-pad"
-                      required
-                      value={formData.mobilePhone}
-                      onChangeText={(value) => handleInputChange('mobilePhone', value)}
-                      error={errors.mobilePhone}
-                      autoCapitalize="none"
-                      maxLength={16}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="Work/Alt Phone"
-                      placeholder="(555) 000-0000"
-                      keyboardType="phone-pad"
-                      value={formData.alternatePhone}
-                      onChangeText={(value) => handleInputChange('alternatePhone', value)}
-                      error={errors.alternatePhone}
-                      autoCapitalize="none"
-                      maxLength={16}
-                    />
-                  </View>
-                </View>
-              </Section>
-
-              <Section title="Service Address" accent="#10b981">
-                <InputField
-                  label="Street Address"
-                  placeholder="123 Evergreen Terrace"
-                  icon={MapPin}
+                  label="Company Name"
+                  placeholder="e.g. Acme Corp"
+                  icon={Building2}
                   required
-                  value={formData.serviceAddress}
-                  onChangeText={(value) => handleInputChange('serviceAddress', value)}
-                  error={errors.serviceAddress}
+                  value={formData.companyName}
+                  onChangeText={value => handleInputChange('companyName', value)}
+                  error={errors.companyName}
                 />
+              ) : null}
 
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="City"
-                      icon={MapPin}
-                      required
-                      placeholder="Springfield"
-                      value={formData.serviceCity}
-                      onChangeText={(value) => handleInputChange('serviceCity', value)}
-                      error={errors.serviceCity}
-                      autoCapitalize="words"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="Zip Code"
-                      placeholder="62704"
-                      required
-                      value={formData.serviceZipCode}
-                      onChangeText={(value) => handleInputChange('serviceZipCode', value)}
-                      error={errors.serviceZipCode}
-                      autoCapitalize="characters"
-                      maxLength={10}
-                    />
-                  </View>
-                </View>
-
-                <View style={[styles.row, styles.rowFront]}>
-                  <View style={{ flex: 1 }}>
-                    <SelectField
-                      label="Country"
-                      icon={MapPin}
-                      required
-                      value={selectedServiceCountry?.name || ''}
-                      error={errors.serviceCountryCode}
-                      isOpen={showServiceCountryOptions}
-                      options={countryOptions}
-                      onPress={() => {
-                        setShowServiceCountryOptions(current => !current);
-                        setShowServiceStateOptions(false);
-                        setShowBillingCountryOptions(false);
-                        setShowBillingStateOptions(false);
-                        setShowPetOptions(false);
-                      }}
-                      onSelect={(value) => {
-                        setFormData(current => ({
-                          ...current,
-                          serviceCountryCode: value,
-                          serviceStateCode: '',
-                        }));
-                        setShowServiceCountryOptions(false);
-                        setErrors({});
-                      }}
-                      placeholder={isLoadingCountries ? 'Loading countries...' : 'Select country'}
-                      disabled={isLoadingCountries}
-                      loading={isLoadingCountries}
-                      zIndex={80}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <SelectField
-                      label="Province"
-                      icon={MapPin}
-                      required
-                      value={selectedServiceState?.name || ''}
-                      error={errors.serviceStateCode}
-                      isOpen={showServiceStateOptions}
-                      options={serviceStateOptions}
-                      onPress={() => {
-                        if (!formData.serviceCountryCode) {
-                          setErrors({ serviceCountryCode: 'Please select country first' });
-                          return;
-                        }
-
-                        setShowServiceStateOptions(current => !current);
-                        setShowServiceCountryOptions(false);
-                        setShowBillingCountryOptions(false);
-                        setShowBillingStateOptions(false);
-                        setShowPetOptions(false);
-                      }}
-                      onSelect={(value) => {
-                        handleInputChange('serviceStateCode', value);
-                        setShowServiceStateOptions(false);
-                      }}
-                      placeholder={isLoadingServiceStates ? 'Loading provinces...' : 'Select province'}
-                      disabled={!formData.serviceCountryCode || isLoadingServiceStates}
-                      loading={isLoadingServiceStates}
-                      zIndex={79}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.toggleRow}>
-                  <View style={styles.toggleLabelGroup}>
-                    <View style={styles.checkSquare}>
-                      {sameAsService && <Check size={14} color="#2563eb" strokeWidth={4} />}
-                    </View>
-                    <Text style={styles.toggleText}>Billing address same as service</Text>
-                  </View>
-                  <Switch
-                    value={sameAsService}
-                    onValueChange={handleToggleSameAsService}
-                    trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
-                    ios_backgroundColor="#e2e8f0"
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    label="First Name"
+                    placeholder="Jane"
+                    required
+                    value={formData.firstName}
+                    onChangeText={value => handleInputChange('firstName', value)}
+                    error={errors.firstName}
+                    autoCapitalize="words"
                   />
                 </View>
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    label="Last Name"
+                    placeholder="Smith"
+                    required
+                    value={formData.lastName}
+                    onChangeText={value => handleInputChange('lastName', value)}
+                    error={errors.lastName}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
 
-                {!sameAsService && (
-                  <View style={{ marginTop: 12 }}>
-                    <InputField
-                      label="Billing Address"
-                      placeholder="P.O. Box 456"
-                      required
-                      value={formData.billingAddress}
-                      onChangeText={(value) => handleInputChange('billingAddress', value)}
-                      error={errors.billingAddress}
-                    />
-                    <View style={[styles.row, { marginTop: 12 }]}>
-                      <View style={{ flex: 1 }}>
-                        <InputField
-                          label="Billing City"
-                          placeholder="Springfield"
-                          required
-                          value={formData.billingCity}
-                          onChangeText={(value) => handleInputChange('billingCity', value)}
-                          error={errors.billingCity}
-                          autoCapitalize="words"
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <InputField
-                          label="Billing Zip Code"
-                          placeholder="62704"
-                          required
-                          value={formData.billingZipCode}
-                          onChangeText={(value) => handleInputChange('billingZipCode', value)}
-                          error={errors.billingZipCode}
-                          autoCapitalize="characters"
-                          maxLength={10}
-                        />
-                      </View>
+              <InputField
+                label="Email Address"
+                placeholder="jane@example.com"
+                icon={Mail}
+                keyboardType="email-address"
+                value={formData.email}
+                onChangeText={value => handleInputChange('email', value)}
+                error={errors.email}
+                autoCapitalize="none"
+              />
+
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    label="Mobile Phone"
+                    placeholder="(555) 000-0000"
+                    icon={Phone}
+                    keyboardType="phone-pad"
+                    required
+                    value={formData.mobilePhone}
+                    onChangeText={value => handleInputChange('mobilePhone', value)}
+                    error={errors.mobilePhone}
+                    autoCapitalize="none"
+                    maxLength={16}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    label="Work/Alt Phone"
+                    placeholder="(555) 000-0000"
+                    keyboardType="phone-pad"
+                    value={formData.alternatePhone}
+                    onChangeText={value => handleInputChange('alternatePhone', value)}
+                    error={errors.alternatePhone}
+                    autoCapitalize="none"
+                    maxLength={16}
+                  />
+                </View>
+              </View>
+            </Section>
+
+            <Section title="Service Address" accent="#10b981">
+              <InputField
+                label="Street Address"
+                placeholder="123 Evergreen Terrace"
+                icon={MapPin}
+                required
+                value={formData.serviceAddress}
+                onChangeText={value => handleInputChange('serviceAddress', value)}
+                error={errors.serviceAddress}
+              />
+
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    label="City"
+                    icon={MapPin}
+                    required
+                    placeholder="Springfield"
+                    value={formData.serviceCity}
+                    onChangeText={value => handleInputChange('serviceCity', value)}
+                    error={errors.serviceCity}
+                    autoCapitalize="words"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    label="Zip Code"
+                    placeholder="62704"
+                    required
+                    value={formData.serviceZipCode}
+                    onChangeText={value => handleInputChange('serviceZipCode', value)}
+                    error={errors.serviceZipCode}
+                    autoCapitalize="characters"
+                    maxLength={10}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <TriggerField
+                    label="Country"
+                    icon={MapPin}
+                    required
+                    value={selectedServiceCountry?.name || ''}
+                    error={errors.serviceCountryCode}
+                    onPress={() => setActiveSheet('serviceCountry')}
+                    placeholder="Select country"
+                    disabled={isLoadingCountries}
+                    loading={isLoadingCountries}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TriggerField
+                    label="Province"
+                    icon={MapPin}
+                    required
+                    value={selectedServiceState?.name || ''}
+                    error={errors.serviceStateCode}
+                    onPress={() => {
+                      if (!formData.serviceCountryCode) {
+                        setErrors({ serviceCountryCode: 'Please select country first' });
+                        return;
+                      }
+                      setActiveSheet('serviceState');
+                    }}
+                    placeholder="Select province"
+                    disabled={!formData.serviceCountryCode || isLoadingServiceStates}
+                    loading={isLoadingServiceStates}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleLabelGroup}>
+                  <View style={styles.checkSquare}>
+                    {sameAsService ? <Check size={14} color="#2563eb" strokeWidth={4} /> : null}
+                  </View>
+                  <Text style={styles.toggleText}>Billing address same as service</Text>
+                </View>
+                <Switch
+                  value={sameAsService}
+                  onValueChange={handleToggleSameAsService}
+                  trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
+                  ios_backgroundColor="#e2e8f0"
+                />
+              </View>
+
+              {!sameAsService ? (
+                <View style={{ marginTop: 12 }}>
+                  <InputField
+                    label="Billing Address"
+                    placeholder="P.O. Box 456"
+                    required
+                    value={formData.billingAddress}
+                    onChangeText={value => handleInputChange('billingAddress', value)}
+                    error={errors.billingAddress}
+                  />
+                  <View style={[styles.row, { marginTop: 12 }]}>
+                    <View style={{ flex: 1 }}>
+                      <InputField
+                        label="Billing City"
+                        placeholder="Springfield"
+                        required
+                        value={formData.billingCity}
+                        onChangeText={value => handleInputChange('billingCity', value)}
+                        error={errors.billingCity}
+                        autoCapitalize="words"
+                      />
                     </View>
-                    <View style={[styles.row, styles.rowFront, { marginTop: 12 }]}>
-                      <View style={{ flex: 1 }}>
-                        <SelectField
-                          label="Billing Country"
-                          icon={MapPin}
-                          required
-                          value={selectedBillingCountry?.name || ''}
-                          error={errors.billingCountryCode}
-                          isOpen={showBillingCountryOptions}
-                          options={countryOptions}
-                          onPress={() => {
-                            setShowBillingCountryOptions(current => !current);
-                            setShowBillingStateOptions(false);
-                            setShowServiceCountryOptions(false);
-                            setShowServiceStateOptions(false);
-                            setShowPetOptions(false);
-                          }}
-                          onSelect={(value) => {
-                            setFormData(current => ({
-                              ...current,
-                              billingCountryCode: value,
-                              billingStateCode: '',
-                            }));
-                            setShowBillingCountryOptions(false);
-                            setErrors({});
-                          }}
-                          placeholder={isLoadingCountries ? 'Loading countries...' : 'Select country'}
-                          disabled={isLoadingCountries}
-                          loading={isLoadingCountries}
-                          zIndex={78}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <SelectField
-                          label="Billing Province"
-                          icon={MapPin}
-                          required
-                          value={selectedBillingState?.name || ''}
-                          error={errors.billingStateCode}
-                          isOpen={showBillingStateOptions}
-                          options={billingStateOptions}
-                          onPress={() => {
-                            if (!formData.billingCountryCode) {
-                              setErrors({ billingCountryCode: 'Please select billing country first' });
-                              return;
-                            }
-
-                            setShowBillingStateOptions(current => !current);
-                            setShowBillingCountryOptions(false);
-                            setShowServiceCountryOptions(false);
-                            setShowServiceStateOptions(false);
-                            setShowPetOptions(false);
-                          }}
-                          onSelect={(value) => {
-                            handleInputChange('billingStateCode', value);
-                            setShowBillingStateOptions(false);
-                          }}
-                          placeholder={isLoadingBillingStates ? 'Loading provinces...' : 'Select province'}
-                          disabled={!formData.billingCountryCode || isLoadingBillingStates}
-                          loading={isLoadingBillingStates}
-                          zIndex={77}
-                        />
-                      </View>
+                    <View style={{ flex: 1 }}>
+                      <InputField
+                        label="Billing Zip Code"
+                        placeholder="62704"
+                        required
+                        value={formData.billingZipCode}
+                        onChangeText={value => handleInputChange('billingZipCode', value)}
+                        error={errors.billingZipCode}
+                        autoCapitalize="characters"
+                        maxLength={10}
+                      />
                     </View>
                   </View>
-                )}
-              </Section>
-
-              <Section title="Property & Access" accent="#6366f1">
-                <View style={[styles.row, styles.rowFront]}>
-                  <View style={{ flex: 1 }}>
-                    <InputField
-                      label="Gate Code"
-                      placeholder="#1234"
-                      icon={ShieldCheck}
-                      value={formData.gateCode}
-                      onChangeText={(value) => handleInputChange('gateCode', value)}
-                      error={errors.gateCode}
-                      autoCapitalize="characters"
-                      maxLength={30}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <SelectField
-                      label="Pets"
-                      icon={Dog}
-                      value={formData.petsNote}
-                      error={errors.petsNote}
-                      isOpen={showPetOptions}
-                      options={PET_OPTIONS}
-                      onPress={() => {
-                        setShowPetOptions(current => !current);
-                        setShowServiceCountryOptions(false);
-                        setShowServiceStateOptions(false);
-                        setShowBillingCountryOptions(false);
-                        setShowBillingStateOptions(false);
-                      }}
-                      onSelect={(value) => {
-                        handleInputChange('petsNote', value);
-                        setShowPetOptions(false);
-                      }}
-                      placeholder="Select pet info"
-                      zIndex={60}
-                    />
+                  <View style={[styles.row, { marginTop: 12 }]}>
+                    <View style={{ flex: 1 }}>
+                      <TriggerField
+                        label="Billing Country"
+                        icon={MapPin}
+                        required
+                        value={selectedBillingCountry?.name || ''}
+                        error={errors.billingCountryCode}
+                        onPress={() => setActiveSheet('billingCountry')}
+                        placeholder="Select country"
+                        disabled={isLoadingCountries}
+                        loading={isLoadingCountries}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <TriggerField
+                        label="Billing Province"
+                        icon={MapPin}
+                        required
+                        value={selectedBillingState?.name || ''}
+                        error={errors.billingStateCode}
+                        onPress={() => {
+                          if (!formData.billingCountryCode) {
+                            setErrors({ billingCountryCode: 'Please select billing country first' });
+                            return;
+                          }
+                          setActiveSheet('billingState');
+                        }}
+                        placeholder="Select province"
+                        disabled={!formData.billingCountryCode || isLoadingBillingStates}
+                        loading={isLoadingBillingStates}
+                      />
+                    </View>
                   </View>
                 </View>
-                <InputField
-                  label="Internal Notes"
-                  placeholder="E.g. Beware of loose gravel..."
-                  icon={StickyNote}
-                  multiline
-                  value={formData.internalNotes}
-                  onChangeText={(value) => handleInputChange('internalNotes', value)}
-                  error={errors.internalNotes}
-                  maxLength={500}
-                />
-              </Section>
-            </View>
-          </TouchableOpacity>
+              ) : null}
+            </Section>
+
+            <Section title="Property & Access" accent="#6366f1">
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <InputField
+                    label="Gate Code"
+                    placeholder="#1234"
+                    icon={ShieldCheck}
+                    value={formData.gateCode}
+                    onChangeText={value => handleInputChange('gateCode', value)}
+                    error={errors.gateCode}
+                    autoCapitalize="characters"
+                    maxLength={30}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TriggerField
+                    label="Pets"
+                    icon={Dog}
+                    value={formData.petsNote}
+                    error={errors.petsNote}
+                    onPress={() => setActiveSheet('pet')}
+                    placeholder="Select pet info"
+                  />
+                </View>
+              </View>
+              <InputField
+                label="Internal Notes"
+                placeholder="E.g. Beware of loose gravel..."
+                icon={StickyNote}
+                multiline
+                value={formData.internalNotes}
+                onChangeText={value => handleInputChange('internalNotes', value)}
+                error={errors.internalNotes}
+                maxLength={500}
+              />
+            </Section>
+          </View>
         </ScrollView>
 
         <View style={styles.footer}>
@@ -1224,6 +1203,21 @@ const UpdateCustomerProfileScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <BottomSheet
+        visible={Boolean(activeSheet && sheetConfig)}
+        onClose={() => setActiveSheet(null)}
+        title={sheetConfig?.title || 'Select'}
+      >
+        <ScrollView style={styles.sheetOptions} showsVerticalScrollIndicator={false}>
+          {(sheetConfig?.options || []).map(option => (
+            <TouchableOpacity key={option.value} style={styles.sheetOptionRow} onPress={option.onSelect}>
+              <Text style={styles.sheetOptionText}>{option.label}</Text>
+              {option.selected ? <Check size={18} color="#2563eb" strokeWidth={3} /> : null}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </BottomSheet>
     </SafeAreaView>
   );
 };
@@ -1231,8 +1225,6 @@ const UpdateCustomerProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   skeletonBlock: { backgroundColor: '#e2e8f0', borderRadius: 12 },
-  centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
-  centerText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1272,21 +1264,17 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.03,
     shadowRadius: 10,
-    overflow: 'visible',
   },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   sectionIndicator: { width: 6, height: 16, borderRadius: 3 },
   sectionTitle: { fontSize: 12, fontWeight: '900', color: '#0f172a', letterSpacing: 1, textTransform: 'uppercase' },
   row: { flexDirection: 'row', gap: 12 },
-  rowFront: { zIndex: 20 },
   inputGroup: { gap: 6 },
-  selectGroup: { overflow: 'visible' },
-  selectLayer: { position: 'relative', overflow: 'visible' },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 4 },
   label: { fontSize: 10, fontWeight: '900', color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase' },
   requiredDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#ef4444' },
   inputWrapper: {
-    height: 48,
+    minHeight: 48,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#f1f5f9',
@@ -1297,47 +1285,14 @@ const styles = StyleSheet.create({
   },
   inputWrapperError: { borderColor: '#ef4444', backgroundColor: '#fff5f5' },
   inputWrapperDisabled: { opacity: 0.65 },
-  textAreaWrapper: { height: 100, alignItems: 'flex-start', paddingTop: 12 },
+  textAreaWrapper: { minHeight: 100, alignItems: 'flex-start', paddingTop: 12 },
   iconCenter: { marginRight: 12 },
   iconTop: { marginRight: 12, marginTop: 4 },
-  textInput: { flex: 1, height: '100%', fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  textArea: { textAlignVertical: 'top' },
+  textInput: { flex: 1, minHeight: 48, fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  textArea: { textAlignVertical: 'top', minHeight: 100 },
   selectText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0f172a' },
   placeholderText: { color: '#cbd5e1' },
-  chevronIcon: { marginLeft: 'auto' },
-  chevronIconOpen: { transform: [{ rotate: '180deg' }] },
   errorText: { fontSize: 12, fontWeight: '600', color: '#ef4444', marginLeft: 4 },
-  selectDropdownOverlay: {
-    position: 'absolute',
-    top: 56,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 12,
-    maxHeight: 220,
-  },
-  selectDropdownScroll: {
-    maxHeight: 220,
-  },
-  optionItem: {
-    minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  optionItemSelected: { backgroundColor: '#eff6ff' },
-  optionText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#475569' },
-  optionTextSelected: { color: '#2563eb' },
   toggleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1382,6 +1337,33 @@ const styles = StyleSheet.create({
   saveBtnText: { color: 'white', fontSize: 18, fontWeight: '900' },
   serverErrorBox: { backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#fecaca', borderRadius: 18, padding: 14 },
   serverErrorText: { color: '#b91c1c', fontSize: 13, fontWeight: '700' },
+  modalRoot: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.26)', justifyContent: 'flex-end' },
+  modalBackdrop: { flex: 1 },
+  sheetCard: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingTop: 10,
+    maxHeight: '82%',
+  },
+  sheetHandle: { alignSelf: 'center', width: 48, height: 5, borderRadius: 999, backgroundColor: '#cbd5e1', marginBottom: 14 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  sheetTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  sheetCloseBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' },
+  sheetOptions: { maxHeight: 360 },
+  sheetOptionRow: {
+    minHeight: 54,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    marginBottom: 10,
+  },
+  sheetOptionText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0f172a', paddingRight: 8 },
 });
 
 export default UpdateCustomerProfileScreen;

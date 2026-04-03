@@ -1,201 +1,433 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import {
-    Briefcase,
-    Calendar,
-    ChevronRight,
-    Clock,
-    MoreHorizontal,
-    Plus,
-    Search,
-    SlidersHorizontal,
-    User
+  Briefcase,
+  Calendar,
+  ChevronRight,
+  Clock,
+  MoreHorizontal,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  User,
+  X,
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Dimensions,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  FlatList,
+  RefreshControl,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
+import { JobResponse, PostApiJobsGetAllJobsParams } from '@/src/api/generated';
+import { getJobCustomerName, getJobDisplayTitle, getJobsApi } from '@/src/services/jobService';
 
-// --- Interfaces ---
-interface Job {
-  id: number;
+type StatusFilter = 'All' | 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled';
+
+type JobCardModel = {
+  id: string;
   title: string;
   customer: string;
-  date: string;
-  time: string;
-  status: 'Scheduled' | 'In Progress' | 'Completed';
-}
+  dateLabel: string;
+  timeLabel: string;
+  status: string;
+  typeLabel: string;
+};
 
-interface StatusStyles {
-  bg: string;
-  text: string;
-  border: string;
-}
+const PAGE_SIZE = 10;
+const STATUS_FILTERS: StatusFilter[] = ['All', 'Scheduled', 'In Progress', 'Completed', 'Cancelled'];
 
-// --- Main Component ---
+const formatJobDate = (value?: string | null) => {
+  if (!value) return 'No date';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'No date';
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(date);
+};
+
+const formatJobTimeRange = (start?: string | null, end?: string | null) => {
+  if (!start) return 'No time';
+
+  const startDate = new Date(start);
+  if (Number.isNaN(startDate.getTime())) return 'No time';
+
+  const startLabel = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(startDate);
+
+  if (!end) {
+    return startLabel;
+  }
+
+  const endDate = new Date(end);
+  if (Number.isNaN(endDate.getTime())) {
+    return startLabel;
+  }
+
+  const endLabel = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(endDate);
+
+  return `${startLabel} - ${endLabel}`;
+};
+
+const mapJobToCard = (job: JobResponse): JobCardModel => ({
+  id: job.id || job.jobNumber || Math.random().toString(),
+  title: getJobDisplayTitle(job),
+  customer: getJobCustomerName(job),
+  dateLabel: formatJobDate(job.scheduledStartAt),
+  timeLabel: formatJobTimeRange(job.scheduledStartAt, job.scheduledEndAt),
+  status: job.status?.trim() || 'Scheduled',
+  typeLabel: job.jobType?.trim() || 'General',
+});
+
+const getStatusStyles = (status: string) => {
+  switch (status) {
+    case 'In Progress':
+      return { bg: '#eff6ff', text: '#2563eb', border: '#dbeafe' };
+    case 'Scheduled':
+      return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
+    case 'Completed':
+      return { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' };
+    case 'Cancelled':
+      return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
+    default:
+      return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
+  }
+};
+
+const SkeletonBlock = ({
+  height,
+  width,
+  style,
+}: {
+  height: number;
+  width: number | `${number}%`;
+  style?: object;
+}) => <View style={[styles.skeletonBlock, { height, width }, style]} />;
+
+const JobCardSkeleton = () => (
+  <View style={styles.jobCard}>
+    <View style={styles.cardTop}>
+      <View style={styles.cardTitleInfo}>
+        <SkeletonBlock height={20} width="68%" />
+        <View style={styles.customerRow}>
+          <SkeletonBlock height={12} width="40%" />
+        </View>
+      </View>
+      <SkeletonBlock height={24} width={92} style={styles.skeletonBadge} />
+    </View>
+
+    <View style={styles.cardDivider} />
+
+    <View style={styles.cardBottom}>
+      <View style={styles.metaInfoRow}>
+        <View style={styles.metaItem}>
+          <SkeletonBlock height={12} width={64} />
+        </View>
+        <View style={styles.metaItem}>
+          <SkeletonBlock height={12} width={92} />
+        </View>
+      </View>
+      <SkeletonBlock height={18} width={18} style={{ borderRadius: 9 }} />
+    </View>
+  </View>
+);
+
+const JobsSkeleton = () => (
+  <View style={styles.scrollContent}>
+    {[0, 1, 2].map(item => (
+      <JobCardSkeleton key={item} />
+    ))}
+  </View>
+);
+
+const EmptyState = ({ loading }: { loading: boolean }) => (
+  <View style={styles.emptyState}>
+    {!loading ? (
+      <>
+        <View style={styles.emptyIconBox}>
+          <Briefcase size={32} color="#cbd5e1" />
+        </View>
+        <Text style={styles.emptyTitle}>No jobs found</Text>
+        <Text style={styles.emptySubtitle}>Try a different search or change the filters.</Text>
+      </>
+    ) : null}
+  </View>
+);
+
 const JobList: React.FC = () => {
-  const [activeFilter, setActiveFilter] = useState<string>('All');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const isFetchingRef = useRef(false);
+  const hasFocusedOnceRef = useRef(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState<StatusFilter>('All');
+  const [jobs, setJobs] = useState<JobCardModel[]>([]);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [error, setError] = useState('');
 
-  const filters = ['All', 'Scheduled', 'In Progress', 'Completed'];
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 350);
 
-  const jobs: Job[] = [
-    { id: 1, title: "Bathroom Leak Repair", customer: "Sarah Johnson", date: "Mar 11, 2026", time: "09:00 AM", status: "In Progress" },
-    { id: 2, title: "Kitchen Rewiring", customer: "Mike Torres", date: "Mar 11, 2026", time: "11:30 AM", status: "Scheduled" },
-    { id: 3, title: "AC Unit Maintenance", customer: "Emma Davis", date: "Mar 12, 2026", time: "10:00 AM", status: "Scheduled" },
-    { id: 4, title: "Main Pipe Replacement", customer: "Alex Chen", date: "Mar 10, 2026", time: "Completed", status: "Completed" },
-    { id: 5, title: "Garden Lighting Install", customer: "Jessica White", date: "Mar 09, 2026", time: "Completed", status: "Completed" }
-  ];
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  const getStatusStyles = (status: Job['status']): StatusStyles => {
-    switch (status) {
-      case 'In Progress': return { bg: '#eff6ff', text: '#2563eb', border: '#dbeafe' };
-      case 'Scheduled': return { bg: '#fffbeb', text: '#d97706', border: '#fef3c7' };
-      case 'Completed': return { bg: '#ecfdf5', text: '#10b981', border: '#d1fae5' };
-      default: return { bg: '#f8fafc', text: '#94a3b8', border: '#f1f5f9' };
+  const requestFilters = useMemo<PostApiJobsGetAllJobsParams>(
+    () => ({
+      PageNumber: 1,
+      PageSize: PAGE_SIZE,
+      Search: debouncedSearch || undefined,
+      Status: activeFilter === 'All' ? undefined : activeFilter,
+    }),
+    [activeFilter, debouncedSearch]
+  );
+
+  const fetchJobs = useCallback(async (
+    nextPage: number,
+    mode: 'initial' | 'refresh' | 'loadMore' = 'initial'
+  ) => {
+    if (isFetchingRef.current) {
+      return;
+    }
+
+    isFetchingRef.current = true;
+
+    if (mode === 'initial') setIsLoading(true);
+    if (mode === 'refresh') setIsRefreshing(true);
+    if (mode === 'loadMore') setIsLoadingMore(true);
+
+    try {
+      const response = await getJobsApi({
+        ...requestFilters,
+        PageNumber: nextPage,
+      });
+
+      const mappedJobs = response.data.map(mapJobToCard);
+      const loadedCount = (response.pageNumber - 1) * response.pageSize + mappedJobs.length;
+
+      setJobs(current => (nextPage === 1 ? mappedJobs : [...current, ...mappedJobs]));
+      setPageNumber(response.pageNumber);
+      setTotalRecords(response.totalRecords);
+      setHasMore(loadedCount < response.totalRecords && mappedJobs.length > 0);
+      setError('');
+    } catch (fetchError: any) {
+      setError(fetchError?.message || 'Failed to load jobs.');
+      if (nextPage === 1) {
+        setJobs([]);
+        setTotalRecords(0);
+        setHasMore(false);
+      }
+    } finally {
+      isFetchingRef.current = false;
+      setIsLoading(false);
+      setIsRefreshing(false);
+      setIsLoadingMore(false);
+    }
+  }, [requestFilters]);
+
+  useEffect(() => {
+    setJobs([]);
+    setPageNumber(1);
+    setHasMore(true);
+    fetchJobs(1, 'initial');
+  }, [fetchJobs]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedOnceRef.current) {
+        hasFocusedOnceRef.current = true;
+        return;
+      }
+
+      fetchJobs(1, 'refresh');
+    }, [fetchJobs])
+  );
+
+  const handleRefresh = () => {
+    fetchJobs(1, 'refresh');
+  };
+
+  const handleLoadMore = () => {
+    if (!isLoading && !isRefreshing && !isLoadingMore && hasMore) {
+      fetchJobs(pageNumber + 1, 'loadMore');
     }
   };
 
-  const filteredJobs = activeFilter === 'All' 
-    ? jobs 
-    : jobs.filter(job => job.status === activeFilter);
+  const titleCountLabel = activeFilter === 'All' ? 'TOTAL JOBS' : `${activeFilter.toUpperCase()} JOBS`;
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      
-      {/* Header Area */}
+
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.titleText}>Job List</Text>
-            <Text style={styles.subtitleText}>
-              {filteredJobs.length} {activeFilter === 'All' ? 'ACTIVE' : activeFilter.toUpperCase()} JOBS
-            </Text>
+            <Text style={styles.subtitleText}>{totalRecords} {titleCountLabel}</Text>
           </View>
           <TouchableOpacity style={styles.moreBtn}>
             <MoreHorizontal size={20} color="#64748b" />
           </TouchableOpacity>
         </View>
 
-        {/* Search & Filter Bar */}
         <View style={styles.searchRow}>
           <View style={styles.searchWrapper}>
             <Search size={18} color="#cbd5e1" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search jobs or clients..."
+              placeholder="Search jobs or customers..."
               placeholderTextColor="#cbd5e1"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
+              value={searchInput}
+              onChangeText={setSearchInput}
             />
+            {!!searchInput && (
+              <TouchableOpacity onPress={() => setSearchInput('')}>
+                <X size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
           </View>
           <TouchableOpacity style={styles.filterSettingsBtn}>
             <SlidersHorizontal size={20} color="#64748b" />
           </TouchableOpacity>
         </View>
 
-        {/* Filter Chips */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
+        <FlatList
+          data={STATUS_FILTERS}
+          horizontal
+          keyExtractor={item => item}
+          showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterChipsContainer}
-        >
-          {filters.map(filter => {
-            const isActive = activeFilter === filter;
+          renderItem={({ item }) => {
+            const isActive = activeFilter === item;
+
             return (
               <TouchableOpacity
-                key={filter}
-                onPress={() => setActiveFilter(filter)}
-                style={[
-                  styles.chip,
-                  isActive && styles.chipActive
-                ]}
+                onPress={() => setActiveFilter(item)}
+                style={[styles.chip, isActive && styles.chipActive]}
               >
                 <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-                  {filter}
+                  {item}
                 </Text>
               </TouchableOpacity>
             );
-          })}
-        </ScrollView>
-      </View>
+          }}
+        />
 
-      {/* Main List */}
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
-        contentContainerStyle={styles.scrollContent}
-      >
-        {filteredJobs.length > 0 ? (
-          <View style={styles.listContainer}>
-            {filteredJobs.map((job) => {
-              const statusStyle = getStatusStyles(job.status);
-              return (
-                <TouchableOpacity key={job.id} style={styles.jobCard} activeOpacity={0.9} onPress={()=>{router.push("../Screens/JobDetailScreen")}}>
-                  <View style={styles.cardTop}>
-                    <View style={styles.cardTitleInfo}>
-                      <Text style={styles.jobTitle}>{job.title}</Text>
-                      <View style={styles.customerRow}>
-                        <User size={12} color="#cbd5e1" />
-                        <Text style={styles.customerName}>{job.customer}</Text>
-                      </View>
-                    </View>
-                    <View style={[
-                      styles.statusBadge, 
-                      { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }
-                    ]}>
-                      <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                        {job.status.toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardDivider} />
-
-                  <View style={styles.cardBottom}>
-                    <View style={styles.metaInfoRow}>
-                      <View style={styles.metaItem}>
-                        <Calendar size={13} color="#cbd5e1" />
-                        <Text style={styles.metaText}>{job.date}</Text>
-                      </View>
-                      <View style={styles.metaItem}>
-                        <Clock size={13} color="#cbd5e1" />
-                        <Text style={styles.metaText}>{job.time}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.arrowBox}>
-                      <ChevronRight size={16} color="#cbd5e1" />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconBox}>
-              <Briefcase size={32} color="#cbd5e1" />
-            </View>
-            <Text style={styles.emptyTitle}>No {activeFilter.toLowerCase()} jobs</Text>
-            <Text style={styles.emptySubtitle}>
-              Try changing your filters or create a new job to get started.
-            </Text>
+        {!!error && (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-      </ScrollView>
+      </View>
 
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9} onPress={()=>{router.push("../Screens/CreateJobScreen")}}>
+      {isLoading && jobs.length === 0 ? (
+        <JobsSkeleton />
+      ) : (
+        <FlatList
+          data={jobs}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => {
+            const statusStyle = getStatusStyles(item.status);
+
+            return (
+              <TouchableOpacity
+                style={styles.jobCard}
+                activeOpacity={0.9}
+                onPress={() => {
+                  router.push({
+                    pathname: '../Screens/JobDetailScreen',
+                    params: { jobId: item.id },
+                  });
+                }}
+              >
+                <View style={styles.cardTop}>
+                  <View style={styles.cardTitleInfo}>
+                    <Text style={styles.jobTitle}>{item.title}</Text>
+                    <View style={styles.customerRow}>
+                      <User size={12} color="#cbd5e1" />
+                      <Text style={styles.customerName}>{item.customer}</Text>
+                    </View>
+                  </View>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: statusStyle.bg, borderColor: statusStyle.border },
+                    ]}
+                  >
+                    <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                      {item.status.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardDivider} />
+
+                <View style={styles.cardBottom}>
+                  <View style={styles.metaInfoRow}>
+                    <View style={styles.metaItem}>
+                      <Calendar size={13} color="#cbd5e1" />
+                      <Text style={styles.metaText}>{item.dateLabel}</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <Clock size={13} color="#cbd5e1" />
+                      <Text style={styles.metaText}>{item.timeLabel}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.typeRow}>
+                    <Text style={styles.typeText}>{item.typeLabel}</Text>
+                    <ChevronRight size={16} color="#cbd5e1" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.35}
+          ListEmptyComponent={<EmptyState loading={isLoading} />}
+          ListFooterComponent={
+            isLoadingMore ? (
+              <View style={styles.footerLoader}>
+                <SkeletonBlock height={28} width={28} style={styles.footerSkeleton} />
+              </View>
+            ) : jobs.length > 0 && !hasMore ? (
+              <Text style={styles.endText}>You have reached the end of the list.</Text>
+            ) : null
+          }
+        />
+      )}
+
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.9}
+        onPress={() => {
+          router.push('../Screens/CreateJobScreen');
+        }}
+      >
         <Plus size={24} color="white" strokeWidth={2.5} />
         <Text style={styles.fabText}>Create Job</Text>
       </TouchableOpacity>
@@ -203,29 +435,16 @@ const JobList: React.FC = () => {
   );
 };
 
-// --- Styles ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    backgroundColor: '#F8FAFC',
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, backgroundColor: '#F8FAFC' },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
   },
-  titleText: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#0f172a',
-    letterSpacing: -1,
-  },
+  titleText: { fontSize: 28, fontWeight: '900', color: '#0f172a', letterSpacing: -1 },
   subtitleText: {
     fontSize: 11,
     fontWeight: '800',
@@ -243,11 +462,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
-  searchRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
+  searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   searchWrapper: {
     flex: 1,
     height: 56,
@@ -258,21 +473,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#f1f5f9',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
   },
-  searchIcon: {
-    marginRight: 12,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
+  searchIcon: { marginRight: 12 },
+  searchInput: { flex: 1, height: '100%', fontSize: 14, fontWeight: '700', color: '#0f172a' },
   filterSettingsBtn: {
     width: 56,
     height: 56,
@@ -283,169 +486,93 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
-  filterChipsContainer: {
-    gap: 8,
-    paddingBottom: 16,
-  },
+  filterChipsContainer: { paddingRight: 24, gap: 10 },
   chip: {
-    // px: 20,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 25,
+    borderRadius: 999,
     backgroundColor: 'white',
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
-  chipActive: {
-    backgroundColor: '#0f172a',
-    borderColor: '#0f172a',
+  chipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  chipText: { fontSize: 12, fontWeight: '800', color: '#64748b' },
+  chipTextActive: { color: 'white' },
+  errorBox: {
+    marginTop: 16,
+    borderRadius: 18,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#94a3b8',
-  },
-  chipTextActive: {
-    color: 'white',
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 140, // Space for FAB
-  },
-  listContainer: {
-    gap: 16,
-    paddingTop: 8,
-  },
+  errorText: { fontSize: 12, color: '#b91c1c', fontWeight: '700' },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 120, gap: 16 },
   jobCard: {
     backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 28,
+    borderRadius: 24,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#f1f5f9',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
   },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  cardTitleInfo: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  jobTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginBottom: 4,
-  },
-  customerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  customerName: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94a3b8',
-  },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  cardTitleInfo: { flex: 1, gap: 10 },
+  jobTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a', lineHeight: 22 },
+  customerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  customerName: { fontSize: 13, color: '#64748b', fontWeight: '600' },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
     borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
-  statusText: {
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  cardDivider: {
-    height: 1,
-    backgroundColor: '#f8fafc',
-    marginVertical: 16,
-  },
-  cardBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  metaInfoRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  metaText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94a3b8',
-  },
-  arrowBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
-    paddingHorizontal: 32,
-  },
+  statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  cardDivider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 16 },
+  cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  metaInfoRow: { flex: 1, gap: 10 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { fontSize: 12, color: '#64748b', fontWeight: '600' },
+  typeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  typeText: { fontSize: 12, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' },
+  emptyState: { paddingHorizontal: 24, paddingTop: 80, alignItems: 'center' },
   emptyIconBox: {
-    width: 64,
-    height: 64,
-    backgroundColor: '#f8fafc',
-    borderRadius: 24,
+    width: 88,
+    height: 88,
+    borderRadius: 28,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0f172a',
-    textAlign: 'center',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#94a3b8',
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-  },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
+  emptySubtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', lineHeight: 20 },
+  skeletonBlock: { backgroundColor: '#e2e8f0', borderRadius: 999 },
+  skeletonBadge: { borderRadius: 999 },
+  footerLoader: { paddingVertical: 8 },
+  footerSkeleton: { borderRadius: 999, alignSelf: 'center' },
+  endText: { textAlign: 'center', color: '#94a3b8', fontSize: 12, fontWeight: '700', paddingBottom: 12 },
   fab: {
     position: 'absolute',
-    bottom: Platform.OS === "ios" ? 100 : 90,
+    bottom: 100,
     right: 24,
-    height: 64,
-    paddingHorizontal: 24,
-    backgroundColor: '#2563eb',
-    borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    elevation: 8,
+    gap: 10,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 20,
+    height: 64,
+    borderRadius: 22,
     shadowColor: '#2563eb',
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
+    elevation: 12,
   },
-  fabText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '900',
-  },
+  fabText: { color: 'white', fontSize: 14, fontWeight: '800' },
 });
 
 export default JobList;

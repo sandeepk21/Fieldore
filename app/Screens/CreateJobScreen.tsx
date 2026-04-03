@@ -1,45 +1,56 @@
+import { router } from 'expo-router';
 import {
-    Briefcase,
-    Calendar,
-    CheckCircle2,
-    ChevronDown,
-    Clock,
-    ListChecks,
-    LucideIcon,
-    MapPin,
-    Plus,
-    StickyNote,
-    Timer,
-    Trash2,
-    User,
-    Users,
-    X,
-    Zap
+  Briefcase,
+  Calendar,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  LucideIcon,
+  MapPin,
+  Plus,
+  StickyNote,
+  Timer,
+  Trash2,
+  User,
+  X,
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
-
-// --- Interfaces ---
-interface ChecklistItem {
-  id: string;
-  task: string;
-  completed: boolean;
-}
+import { useLoader } from '@/src/context/LoaderContext';
+import { getCustomerDisplayName, getCustomersApi } from '@/src/services/customerService';
+import { createJobApi } from '@/src/services/jobService';
+import {
+  CreateJobFormData,
+  CreateJobFormErrors,
+  DURATION_OPTIONS,
+  JOB_PRIORITY_OPTIONS,
+  JOB_STATUS_OPTIONS,
+  JOB_TYPE_OPTIONS,
+  buildCreateJobPayload,
+  createInitialJobFormData,
+  validateCreateJobForm,
+  validateJobField,
+} from '@/src/utils/jobValidation';
 
 interface SectionProps {
   title: string;
@@ -53,10 +64,140 @@ interface InputFieldProps {
   icon?: LucideIcon;
   required?: boolean;
   multiline?: boolean;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'numeric';
+  value: string;
+  onChangeText: (value: string) => void;
+  error?: string;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  maxLength?: number;
 }
 
-// --- Sub-Components ---
+interface TriggerFieldProps {
+  label: string;
+  placeholder: string;
+  icon: LucideIcon;
+  value: string;
+  onPress: () => void;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+}
+
+type CustomerOption = {
+  label: string;
+  value: string;
+};
+
+type ActiveSheet = 'customer' | 'jobType' | 'priority' | 'status' | 'duration' | null;
+
+type TimeParts = {
+  hour12: number;
+  minute: number;
+  meridiem: 'AM' | 'PM';
+};
+
+const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, index) => index * 5);
+
+const toTwoDigits = (value: number) => String(value).padStart(2, '0');
+
+const formatMonthLabel = (date: Date) =>
+  new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
+
+const formatDisplayDate = (value: string) => {
+  if (!value) return '';
+
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(date);
+};
+
+const formatDisplayTime = (value: string) => {
+  if (!value) return '';
+
+  const [hourString, minuteString] = value.split(':');
+  const hour = Number(hourString);
+  const minute = Number(minuteString);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return value;
+
+  const date = new Date();
+  date.setHours(hour, minute, 0, 0);
+
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+};
+
+const parseTimeParts = (value: string): TimeParts => {
+  const [hourString, minuteString] = value.split(':');
+  const hour24 = Number(hourString);
+  const minute = Number(minuteString);
+
+  if (!Number.isFinite(hour24) || !Number.isFinite(minute)) {
+    return { hour12: 9, minute: 0, meridiem: 'AM' };
+  }
+
+  const meridiem = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+
+  return {
+    hour12,
+    minute,
+    meridiem,
+  };
+};
+
+const formatTimeParts = ({ hour12, minute, meridiem }: TimeParts) => {
+  const normalizedHour12 = Math.min(Math.max(hour12, 1), 12);
+  const normalizedMinute = Math.min(Math.max(minute, 0), 59);
+  const hour24 =
+    meridiem === 'PM'
+      ? normalizedHour12 === 12
+        ? 12
+        : normalizedHour12 + 12
+      : normalizedHour12 === 12
+        ? 0
+        : normalizedHour12;
+
+  return `${toTwoDigits(hour24)}:${toTwoDigits(normalizedMinute)}`;
+};
+
+const getCalendarDays = (cursor: Date) => {
+  const startOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const endOfMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+  const startDay = startOfMonth.getDay();
+  const totalDays = endOfMonth.getDate();
+  const cells: (Date | null)[] = [];
+
+  for (let index = 0; index < startDay; index += 1) {
+    cells.push(null);
+  }
+
+  for (let day = 1; day <= totalDays; day += 1) {
+    cells.push(new Date(cursor.getFullYear(), cursor.getMonth(), day));
+  }
+
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  return cells;
+};
+
+const toIsoDate = (date: Date) =>
+  `${date.getFullYear()}-${toTwoDigits(date.getMonth() + 1)}-${toTwoDigits(date.getDate())}`;
 
 const Section: React.FC<SectionProps> = ({ title, accent, children }) => (
   <View style={styles.sectionCard}>
@@ -68,261 +209,1018 @@ const Section: React.FC<SectionProps> = ({ title, accent, children }) => (
   </View>
 );
 
-const InputField: React.FC<InputFieldProps> = ({ label, placeholder, icon: Icon, required, multiline, keyboardType = 'default' }) => (
+const InputField: React.FC<InputFieldProps> = ({
+  label,
+  placeholder,
+  icon: Icon,
+  required,
+  multiline,
+  keyboardType = 'default',
+  value,
+  onChangeText,
+  error,
+  autoCapitalize = 'sentences',
+  maxLength,
+}) => (
   <View style={styles.inputGroup}>
     <View style={styles.labelRow}>
       <Text style={styles.label}>{label}</Text>
-      {required && <View style={styles.requiredDot} />}
+      {required ? <View style={styles.requiredDot} /> : null}
     </View>
-    <View style={[styles.inputWrapper, multiline && styles.textAreaWrapper]}>
-      {Icon && <Icon size={16} color="#cbd5e1" style={multiline ? styles.iconTop : styles.iconCenter} />}
+    <View style={[styles.inputWrapper, multiline && styles.textAreaWrapper, error && styles.inputWrapperError]}>
+      {Icon ? <Icon size={16} color="#cbd5e1" style={multiline ? styles.iconTop : styles.iconCenter} /> : null}
       <TextInput
         style={[styles.textInput, multiline && styles.textArea, !Icon && { paddingLeft: 16 }]}
         placeholder={placeholder}
         placeholderTextColor="#cbd5e1"
         multiline={multiline}
         keyboardType={keyboardType}
+        value={value}
+        onChangeText={onChangeText}
+        autoCapitalize={autoCapitalize}
+        maxLength={maxLength}
       />
     </View>
+    {!!error && <Text style={styles.errorText}>{error}</Text>}
   </View>
 );
 
-// --- Main Screen ---
+const TriggerField: React.FC<TriggerFieldProps> = ({
+  label,
+  placeholder,
+  icon: Icon,
+  value,
+  onPress,
+  error,
+  required,
+  disabled,
+  loading,
+}) => (
+  <View style={styles.inputGroup}>
+    <View style={styles.labelRow}>
+      <Text style={styles.label}>{label}</Text>
+      {required ? <View style={styles.requiredDot} /> : null}
+    </View>
+    <TouchableOpacity
+      style={[styles.inputWrapper, error && styles.inputWrapperError, disabled && styles.inputWrapperDisabled]}
+      activeOpacity={0.8}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Icon size={16} color="#cbd5e1" style={styles.iconCenter} />
+      <Text style={[styles.selectText, !value && styles.placeholderText]}>
+        {loading ? 'Loading...' : value || placeholder}
+      </Text>
+      <ChevronDown size={16} color="#94a3b8" />
+    </TouchableOpacity>
+    {!!error && <Text style={styles.errorText}>{error}</Text>}
+  </View>
+);
+
+const BottomSheet = ({
+  visible,
+  onClose,
+  title,
+  children,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <View style={styles.modalRoot}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <View style={styles.sheetCard}>
+        <View style={styles.sheetHandle} />
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>{title}</Text>
+          <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
+            <X size={18} color="#64748b" />
+          </TouchableOpacity>
+        </View>
+        {children}
+      </View>
+    </View>
+  </Modal>
+);
 
 const CreateJobScreen: React.FC = () => {
-  const [priority, setPriority] = useState<'Normal' | 'Urgent'>('Normal');
-  const [useCustomerAddress, setUseCustomerAddress] = useState(true);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([
-    { id: '1', task: 'Initial Inspection', completed: false },
-    { id: '2', task: 'Safety Check', completed: false }
-  ]);
+  const { showLoader, hideLoader } = useLoader();
+  const [formData, setFormData] = useState<CreateJobFormData>(createInitialJobFormData());
+  const [errors, setErrors] = useState<CreateJobFormErrors>({});
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
+  const [isDateSheetVisible, setIsDateSheetVisible] = useState(false);
+  const [isTimeSheetVisible, setIsTimeSheetVisible] = useState(false);
+  const [calendarCursor, setCalendarCursor] = useState(() => new Date());
+  const [timeParts, setTimeParts] = useState<TimeParts>({ hour12: 9, minute: 0, meridiem: 'AM' });
+  const [pendingChecklistItem, setPendingChecklistItem] = useState('');
 
-  const addTask = () => {
-    setChecklist([...checklist, { id: Date.now().toString(), task: '', completed: false }]);
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setIsLoadingCustomers(true);
+
+      try {
+        const result = await getCustomersApi({
+          pageNumber: 1,
+          pageSize: 100,
+          isActive: true,
+        });
+
+        setCustomers(
+          result.data
+            .map(customer => ({
+              label: getCustomerDisplayName(customer),
+              value: customer.id || '',
+            }))
+            .filter(option => option.value)
+        );
+      } catch (error: any) {
+        setErrors(current => ({
+          ...current,
+          server: error?.message || 'Failed to load customers.',
+        }));
+      } finally {
+        setIsLoadingCustomers(false);
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
+  const selectedCustomerLabel = useMemo(
+    () => customers.find(customer => customer.value === formData.customerId)?.label || '',
+    [customers, formData.customerId]
+  );
+
+  const formIsValid = useMemo(
+    () => Object.keys(validateCreateJobForm(formData)).length === 0,
+    [formData]
+  );
+
+  const calendarDays = useMemo(() => getCalendarDays(calendarCursor), [calendarCursor]);
+
+  const closeAllSheets = () => {
+    setActiveSheet(null);
+    setIsDateSheetVisible(false);
+    setIsTimeSheetVisible(false);
   };
 
-  const removeTask = (id: string) => {
-    setChecklist(checklist.filter(item => item.id !== id));
+  const handleFieldChange = useCallback((field: keyof CreateJobFormData, value: string | boolean | string[]) => {
+    const nextData = { ...formData, [field]: value } as CreateJobFormData;
+    setFormData(nextData);
+
+    const fieldError = validateJobField(field, nextData[field], nextData);
+    if (fieldError) {
+      setErrors({ [field]: fieldError });
+      return;
+    }
+
+    if (errors[field] || errors.server || errors.scheduledAt) {
+      setErrors({});
+    }
+  }, [errors, formData]);
+
+  const handleChecklistChange = (index: number, value: string) => {
+    const nextChecklist = [...formData.checklist];
+    nextChecklist[index] = value;
+    handleFieldChange('checklist', nextChecklist);
   };
+
+  const handleRemoveChecklistItem = (index: number) => {
+    const nextChecklist = formData.checklist.filter((_, itemIndex) => itemIndex !== index);
+    handleFieldChange('checklist', nextChecklist);
+  };
+
+  const handleAddChecklistItem = () => {
+    const taskName = pendingChecklistItem.trim();
+    if (!taskName) return;
+
+    handleFieldChange('checklist', [...formData.checklist, taskName]);
+    setPendingChecklistItem('');
+  };
+
+  const openDateSheet = () => {
+    closeAllSheets();
+
+    const initialDate = formData.scheduledDate
+      ? new Date(`${formData.scheduledDate}T00:00:00`)
+      : new Date();
+
+    setCalendarCursor(
+      Number.isNaN(initialDate.getTime()) ? new Date() : initialDate
+    );
+    setIsDateSheetVisible(true);
+  };
+
+  const openTimeSheet = () => {
+    closeAllSheets();
+    setTimeParts(parseTimeParts(formData.scheduledTime));
+    setIsTimeSheetVisible(true);
+  };
+
+  const handleSelectDate = (date: Date) => {
+    handleFieldChange('scheduledDate', toIsoDate(date));
+    setIsDateSheetVisible(false);
+  };
+
+  const handleConfirmTime = () => {
+    handleFieldChange('scheduledTime', formatTimeParts(timeParts));
+    setIsTimeSheetVisible(false);
+  };
+
+  const handleSubmit = async () => {
+    const validationErrors = validateCreateJobForm(formData);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setErrors({});
+    setIsSubmitting(true);
+    showLoader();
+
+    try {
+      const createdJob = await createJobApi(buildCreateJobPayload(formData));
+
+      Alert.alert('Success', 'Job created successfully.');
+      router.replace({
+        pathname: '../Screens/JobDetailScreen',
+        params: { jobId: createdJob.id || '' },
+      });
+    } catch (error: any) {
+      setErrors({
+        server: error?.message || 'Failed to create job. Please try again.',
+      });
+    } finally {
+      hideLoader();
+      setIsSubmitting(false);
+    }
+  };
+
+  const sheetConfig = useMemo(() => {
+    switch (activeSheet) {
+      case 'customer':
+        return {
+          title: 'Select Customer',
+          options: customers.map(option => ({
+            ...option,
+            selected: formData.customerId === option.value,
+            onSelect: () => {
+              handleFieldChange('customerId', option.value);
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'jobType':
+        return {
+          title: 'Select Job Type',
+          options: JOB_TYPE_OPTIONS.map(option => ({
+            label: option,
+            value: option,
+            selected: formData.jobType === option,
+            onSelect: () => {
+              handleFieldChange('jobType', option);
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'priority':
+        return {
+          title: 'Select Priority',
+          options: JOB_PRIORITY_OPTIONS.map(option => ({
+            label: option,
+            value: option,
+            selected: formData.priority === option,
+            onSelect: () => {
+              handleFieldChange('priority', option);
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'status':
+        return {
+          title: 'Select Status',
+          options: JOB_STATUS_OPTIONS.map(option => ({
+            label: option,
+            value: option,
+            selected: formData.status === option,
+            onSelect: () => {
+              handleFieldChange('status', option);
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'duration':
+        return {
+          title: 'Select Duration',
+          options: DURATION_OPTIONS.map(option => ({
+            label: `${option} mins`,
+            value: option,
+            selected: formData.estimatedDurationMinutes === option,
+            onSelect: () => {
+              handleFieldChange('estimatedDurationMinutes', option);
+              setActiveSheet(null);
+            },
+          })),
+        };
+      default:
+        return null;
+    }
+  }, [activeSheet, customers, formData, handleFieldChange]);
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      
-      {/* Header */}
+
       <View style={styles.header}>
-        <TouchableOpacity style={styles.closeBtn}>
+        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
           <X size={20} color="#94a3b8" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>CREATE NEW JOB</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* 1. Job Overview */}
+          {!!errors.server && (
+            <View style={styles.serverErrorBox}>
+              <Text style={styles.serverErrorText}>{errors.server}</Text>
+            </View>
+          )}
+
           <Section title="Job Overview" accent="#2563eb">
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Customer</Text>
-              <TouchableOpacity style={styles.inputWrapper} activeOpacity={0.7}>
-                <User size={16} color="#cbd5e1" style={styles.iconCenter} />
-                <Text style={styles.placeholderText}>Select Customer...</Text>
-                <ChevronDown size={16} color="#94a3b8" style={{ marginLeft: 'auto' }} />
-              </TouchableOpacity>
-            </View>
+            <TriggerField
+              label="Customer"
+              placeholder="Select customer..."
+              icon={User}
+              value={selectedCustomerLabel}
+              error={errors.customerId}
+              required
+              onPress={() => setActiveSheet('customer')}
+              disabled={isLoadingCustomers}
+              loading={isLoadingCustomers}
+            />
 
-            <InputField label="Job Title" placeholder="e.g. Master Bedroom HVAC Repair" icon={Zap} required />
-            
+            <InputField
+              label="Job Title"
+              placeholder="e.g. Master Bedroom HVAC Repair"
+              icon={Briefcase}
+              required
+              value={formData.title}
+              onChangeText={value => handleFieldChange('title', value)}
+              error={errors.title}
+              maxLength={120}
+            />
+
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Job Type</Text>
-                <TouchableOpacity style={styles.inputWrapper} activeOpacity={0.7}>
-                  <Briefcase size={16} color="#cbd5e1" style={styles.iconCenter} />
-                  <Text style={styles.selectText}>Repair</Text>
-                  <ChevronDown size={16} color="#94a3b8" style={{ marginLeft: 'auto' }} />
-                </TouchableOpacity>
+                <TriggerField
+                  label="Job Type"
+                  placeholder="Select job type"
+                  icon={Briefcase}
+                  value={formData.jobType}
+                  error={errors.jobType}
+                  required
+                  onPress={() => setActiveSheet('jobType')}
+                />
               </View>
+
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Priority</Text>
-                <View style={styles.priorityToggle}>
-                  {(['Normal', 'Urgent'] as const).map(p => (
-                    <TouchableOpacity
-                      key={p}
-                      onPress={() => setPriority(p)}
-                      style={[
-                        styles.priorityBtn,
-                        priority === p && (p === 'Urgent' ? styles.btnUrgent : styles.btnNormal)
-                      ]}
-                    >
-                      <Text style={[styles.priorityBtnText, priority === p && styles.priorityBtnTextActive]}>
-                        {p}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                <TriggerField
+                  label="Priority"
+                  placeholder="Select priority"
+                  icon={CheckCircle2}
+                  value={formData.priority}
+                  onPress={() => setActiveSheet('priority')}
+                />
               </View>
             </View>
           </Section>
 
-          {/* 2. Schedule */}
-          <Section title="Schedule & Team" accent="#f59e0b">
-            <View style={styles.row}>
-              <View style={{ flex: 1 }}><InputField label="Start Date" placeholder="Mar 16, 2026" icon={Calendar} required /></View>
-              <View style={{ flex: 1 }}><InputField label="Start Time" placeholder="09:00 AM" icon={Clock} required /></View>
-            </View>
+          <Section title="Schedule" accent="#f59e0b">
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Duration</Text>
-                <TouchableOpacity style={styles.inputWrapper} activeOpacity={0.7}>
-                  <Timer size={16} color="#cbd5e1" style={styles.iconCenter} />
-                  <Text style={styles.selectText}>2 Hours</Text>
-                  <ChevronDown size={16} color="#94a3b8" style={{ marginLeft: 'auto' }} />
-                </TouchableOpacity>
+                <TriggerField
+                  label="Start Date"
+                  placeholder="Choose a date"
+                  icon={Calendar}
+                  value={formatDisplayDate(formData.scheduledDate)}
+                  error={errors.scheduledDate || errors.scheduledAt}
+                  required
+                  onPress={openDateSheet}
+                />
               </View>
+
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Assign Tech</Text>
-                <TouchableOpacity style={styles.inputWrapper} activeOpacity={0.7}>
-                  <Users size={16} color="#cbd5e1" style={styles.iconCenter} />
-                  <Text style={styles.selectText}>Alex (Me)</Text>
-                  <ChevronDown size={16} color="#94a3b8" style={{ marginLeft: 'auto' }} />
-                </TouchableOpacity>
+                <TriggerField
+                  label="Start Time"
+                  placeholder="Choose a time"
+                  icon={Clock}
+                  value={formatDisplayTime(formData.scheduledTime)}
+                  error={errors.scheduledTime || errors.scheduledAt}
+                  required
+                  onPress={openTimeSheet}
+                />
+              </View>
+            </View>
+
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <TriggerField
+                  label="Duration"
+                  placeholder="Select duration"
+                  icon={Timer}
+                  value={formData.estimatedDurationMinutes ? `${formData.estimatedDurationMinutes} mins` : ''}
+                  error={errors.estimatedDurationMinutes}
+                  required
+                  onPress={() => setActiveSheet('duration')}
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <TriggerField
+                  label="Status"
+                  placeholder="Select status"
+                  icon={CheckCircle2}
+                  value={formData.status}
+                  onPress={() => setActiveSheet('status')}
+                />
               </View>
             </View>
           </Section>
 
-          {/* 3. Location */}
           <Section title="Job Location" accent="#10b981">
             <View style={styles.toggleRow}>
               <View style={styles.toggleLabelGroup}>
                 <View style={styles.checkSquare}>
-                  {useCustomerAddress && <CheckCircle2 size={18} color="#2563eb" strokeWidth={3} />}
+                  {formData.useCustomerPrimaryAddress ? <CheckCircle2 size={18} color="#2563eb" strokeWidth={3} /> : null}
                 </View>
                 <Text style={styles.toggleText}>Use customer primary address</Text>
               </View>
               <Switch
-                value={useCustomerAddress}
-                onValueChange={setUseCustomerAddress}
+                value={formData.useCustomerPrimaryAddress}
+                onValueChange={value => handleFieldChange('useCustomerPrimaryAddress', value)}
                 trackColor={{ false: '#e2e8f0', true: '#2563eb' }}
                 ios_backgroundColor="#e2e8f0"
               />
             </View>
-            
-            {!useCustomerAddress && (
-              <View style={{ marginTop: 12 }}>
-                <InputField label="Street Address" placeholder="123 Job Site St" icon={MapPin} />
-              </View>
-            )}
+
+            {!formData.useCustomerPrimaryAddress ? (
+              <>
+                <InputField
+                  label="Street Address"
+                  placeholder="123 Job Site St"
+                  icon={MapPin}
+                  required
+                  value={formData.serviceAddress}
+                  onChangeText={value => handleFieldChange('serviceAddress', value)}
+                  error={errors.serviceAddress}
+                />
+
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="City"
+                      placeholder="Austin"
+                      required
+                      value={formData.serviceCity}
+                      onChangeText={value => handleFieldChange('serviceCity', value)}
+                      error={errors.serviceCity}
+                    />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="State / Province"
+                      placeholder="Texas"
+                      required
+                      value={formData.serviceState}
+                      onChangeText={value => handleFieldChange('serviceState', value)}
+                      error={errors.serviceState}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Postal Code"
+                      placeholder="78701"
+                      required
+                      value={formData.servicePostalCode}
+                      onChangeText={value => handleFieldChange('servicePostalCode', value)}
+                      error={errors.servicePostalCode}
+                      autoCapitalize="none"
+                    />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <InputField
+                      label="Country"
+                      placeholder="USA"
+                      required
+                      value={formData.serviceCountry}
+                      onChangeText={value => handleFieldChange('serviceCountry', value)}
+                      error={errors.serviceCountry}
+                    />
+                  </View>
+                </View>
+              </>
+            ) : null}
           </Section>
 
-          {/* 4. Scope & Checklist */}
           <Section title="Work Scope" accent="#6366f1">
-            <InputField label="Job Description" placeholder="Describe the work to be done..." icon={StickyNote} multiline />
+            <InputField
+              label="Job Description"
+              placeholder="Describe the work to be done..."
+              icon={StickyNote}
+              multiline
+              value={formData.description}
+              onChangeText={value => handleFieldChange('description', value)}
+              error={errors.description}
+              maxLength={1000}
+            />
 
             <View style={styles.checklistHeader}>
               <Text style={styles.label}>Initial Checklist</Text>
-              <ListChecks size={14} color="#cbd5e1" />
+              <Text style={styles.helperText}>Edit existing tasks or add new ones below.</Text>
             </View>
 
             <View style={styles.checkListContainer}>
-              {checklist.map((item) => (
-                <View key={item.id} style={styles.checkRow}>
+              {formData.checklist.map((item, index) => (
+                <View key={`check-${index}`} style={styles.checkRow}>
                   <View style={styles.checkInputWrapper}>
                     <View style={styles.checkDot} />
                     <TextInput
                       style={styles.checkInput}
                       placeholder="Task description..."
                       placeholderTextColor="#cbd5e1"
-                      defaultValue={item.task}
+                      value={item}
+                      onChangeText={value => handleChecklistChange(index, value)}
                     />
                   </View>
-                  <TouchableOpacity onPress={() => removeTask(item.id)} style={styles.deleteTaskBtn}>
-                    <Trash2 size={16} color="#cbd5e1" />
+                  <TouchableOpacity onPress={() => handleRemoveChecklistItem(index)} style={styles.deleteTaskBtn}>
+                    <Trash2 size={16} color="#f43f5e" />
                   </TouchableOpacity>
                 </View>
               ))}
-              <TouchableOpacity style={styles.addTaskBtn} onPress={addTask}>
-                <Plus size={14} color="#94a3b8" />
-                <Text style={styles.addTaskText}>ADD TASK</Text>
-              </TouchableOpacity>
+
+              <View style={styles.newTaskComposer}>
+                <View style={styles.checkInputWrapper}>
+                  <Plus size={16} color="#94a3b8" />
+                  <TextInput
+                    style={styles.checkInput}
+                    placeholder="Add another task..."
+                    placeholderTextColor="#cbd5e1"
+                    value={pendingChecklistItem}
+                    onChangeText={setPendingChecklistItem}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[styles.addTaskBtn, !pendingChecklistItem.trim() && styles.addTaskBtnDisabled]}
+                  onPress={handleAddChecklistItem}
+                  disabled={!pendingChecklistItem.trim()}
+                >
+                  <Text style={styles.addTaskText}>ADD TASK</Text>
+                </TouchableOpacity>
+              </View>
+
+              {!!errors.checklist && <Text style={styles.errorText}>{errors.checklist}</Text>}
             </View>
           </Section>
-
         </ScrollView>
 
-        {/* Sticky Footer */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.createBtn} activeOpacity={0.9}>
-            <Text style={styles.createBtnText}>Create & Schedule Job</Text>
-            <Calendar size={20} color="white" strokeWidth={3} />
+          <TouchableOpacity
+            style={[styles.createBtn, (!formIsValid || isSubmitting) && styles.createBtnDisabled]}
+            activeOpacity={0.9}
+            onPress={handleSubmit}
+            disabled={!formIsValid || isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.createBtnText}>Create Job</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <BottomSheet
+        visible={Boolean(activeSheet && sheetConfig)}
+        onClose={() => setActiveSheet(null)}
+        title={sheetConfig?.title || 'Select'}
+      >
+        <ScrollView style={styles.sheetOptions} showsVerticalScrollIndicator={false}>
+          {(sheetConfig?.options || []).map(option => (
+            <TouchableOpacity key={option.value} style={styles.sheetOptionRow} onPress={option.onSelect}>
+              <Text style={styles.sheetOptionText}>{option.label}</Text>
+              {option.selected ? <Check size={18} color="#2563eb" strokeWidth={3} /> : null}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={isDateSheetVisible}
+        onClose={() => setIsDateSheetVisible(false)}
+        title="Choose Start Date"
+      >
+        <View style={styles.calendarHeader}>
+          <TouchableOpacity style={styles.calendarNavBtn} onPress={() => setCalendarCursor(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>
+            <ChevronLeft size={18} color="#334155" />
+          </TouchableOpacity>
+          <Text style={styles.calendarTitle}>{formatMonthLabel(calendarCursor)}</Text>
+          <TouchableOpacity style={styles.calendarNavBtn} onPress={() => setCalendarCursor(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>
+            <ChevronRight size={18} color="#334155" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.weekdayRow}>
+          {WEEKDAY_LABELS.map(label => (
+            <Text key={label} style={styles.weekdayText}>{label}</Text>
+          ))}
+        </View>
+
+        <View style={styles.calendarGrid}>
+          {calendarDays.map((date, index) => {
+            const isoDate = date ? toIsoDate(date) : '';
+            const isSelected = isoDate === formData.scheduledDate;
+
+            return (
+              <TouchableOpacity
+                key={`${isoDate}-${index}`}
+                style={[styles.calendarCell, isSelected && styles.calendarCellSelected, !date && styles.calendarCellEmpty]}
+                disabled={!date}
+                onPress={() => {
+                  if (date) {
+                    handleSelectDate(date);
+                  }
+                }}
+              >
+                <Text style={[styles.calendarCellText, isSelected && styles.calendarCellTextSelected]}>
+                  {date ? date.getDate() : ''}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={isTimeSheetVisible}
+        onClose={() => setIsTimeSheetVisible(false)}
+        title="Choose Start Time"
+      >
+        <View style={styles.timeSheetContent}>
+          <View style={styles.timeSelectorColumn}>
+            <Text style={styles.timeSelectorLabel}>Hour</Text>
+            <View style={styles.timeChipWrap}>
+              {HOUR_OPTIONS.map(hour => (
+                <TouchableOpacity
+                  key={hour}
+                  style={[styles.timeChip, timeParts.hour12 === hour && styles.timeChipActive]}
+                  onPress={() => setTimeParts(current => ({ ...current, hour12: hour }))}
+                >
+                  <Text style={[styles.timeChipText, timeParts.hour12 === hour && styles.timeChipTextActive]}>
+                    {hour}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.timeSelectorColumn}>
+            <Text style={styles.timeSelectorLabel}>Minutes</Text>
+            <View style={styles.timeChipWrap}>
+              {MINUTE_OPTIONS.map(minute => (
+                <TouchableOpacity
+                  key={minute}
+                  style={[styles.timeChip, timeParts.minute === minute && styles.timeChipActive]}
+                  onPress={() => setTimeParts(current => ({ ...current, minute }))}
+                >
+                  <Text style={[styles.timeChipText, timeParts.minute === minute && styles.timeChipTextActive]}>
+                    {toTwoDigits(minute)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.meridiemRow}>
+          {(['AM', 'PM'] as const).map(option => (
+            <TouchableOpacity
+              key={option}
+              style={[styles.meridiemChip, timeParts.meridiem === option && styles.meridiemChipActive]}
+              onPress={() => setTimeParts(current => ({ ...current, meridiem: option }))}
+            >
+              <Text style={[styles.meridiemChipText, timeParts.meridiem === option && styles.meridiemChipTextActive]}>
+                {option}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TouchableOpacity style={styles.confirmPickerBtn} onPress={handleConfirmTime}>
+          <Text style={styles.confirmPickerBtnText}>Set Time</Text>
+        </TouchableOpacity>
+      </BottomSheet>
     </SafeAreaView>
   );
 };
 
-// --- Styles ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   header: {
+    height: 72,
+    paddingHorizontal: 24,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    justifyContent: 'space-between',
     backgroundColor: '#F8FAFC',
   },
-  closeBtn: { width: 40, height: 40, backgroundColor: 'white', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
-  headerTitle: { fontSize: 12, fontWeight: '900', color: '#94a3b8', letterSpacing: 2 },
-  scrollContent: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 160 },
-  formContent: { gap: 20 },
-  sectionCard: { backgroundColor: 'white', padding: 24, borderRadius: 32, borderWidth: 1, borderColor: '#f1f5f9', gap: 16, marginBottom: 20, elevation: 2, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  sectionIndicator: { width: 6, height: 16, borderRadius: 3 },
-  sectionTitle: { fontSize: 12, fontWeight: '900', color: '#0f172a', letterSpacing: 1, textTransform: 'uppercase' },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  headerTitle: { fontSize: 12, fontWeight: '900', color: '#0f172a', letterSpacing: 1.8 },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 140, paddingTop: 8 },
+  serverErrorBox: {
+    borderRadius: 18,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 18,
+  },
+  serverErrorText: { color: '#b91c1c', fontSize: 12, fontWeight: '700', lineHeight: 18 },
+  sectionCard: {
+    backgroundColor: 'white',
+    borderRadius: 28,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    marginBottom: 18,
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 18, gap: 10 },
+  sectionIndicator: { width: 10, height: 10, borderRadius: 5 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  inputGroup: { marginBottom: 16 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: '700', color: '#334155' },
+  requiredDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#ef4444' },
+  inputWrapper: {
+    minHeight: 56,
+    backgroundColor: '#f8fafc',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+  },
+  inputWrapperError: { borderColor: '#f87171', backgroundColor: '#fff7f7' },
+  inputWrapperDisabled: { opacity: 0.7 },
+  textInput: {
+    flex: 1,
+    minHeight: 56,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+    paddingLeft: 12,
+  },
+  textAreaWrapper: { alignItems: 'flex-start', paddingVertical: 14 },
+  textArea: { minHeight: 120, textAlignVertical: 'top', paddingTop: 0 },
+  iconCenter: { marginTop: 0 },
+  iconTop: { marginTop: 4 },
+  selectText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0f172a', paddingLeft: 12 },
+  placeholderText: { color: '#cbd5e1' },
+  errorText: { marginTop: 6, color: '#dc2626', fontSize: 12, fontWeight: '700' },
   row: { flexDirection: 'row', gap: 12 },
-  inputGroup: { gap: 6 },
-  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 4 },
-  label: { fontSize: 10, fontWeight: '900', color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase' },
-  placeholderText: { fontSize: 14, fontWeight: '700', color: '#cbd5e1', flex: 1 },
-  selectText: { fontSize: 14, fontWeight: '700', color: '#0f172a', flex: 1 },
-  requiredDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#ef4444' },
-  inputWrapper: { height: 48, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#f1f5f9', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
-  textAreaWrapper: { height: 100, alignItems: 'flex-start', paddingTop: 12 },
-  iconCenter: { marginRight: 12 },
-  iconTop: { marginRight: 12, marginTop: 4 },
-  textInput: { flex: 1, height: '100%', fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  textArea: { textAlignVertical: 'top' },
-  priorityToggle: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 12, padding: 4, height: 48 },
-  priorityBtn: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  btnNormal: { backgroundColor: 'white', elevation: 2 },
-  btnUrgent: { backgroundColor: '#f43f5e', elevation: 2 },
-  priorityBtnText: { fontSize: 10, fontWeight: '900', color: '#94a3b8' },
-  priorityBtnTextActive: { color: '#0f172a' },
-  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#f1f5f9' },
-  toggleLabelGroup: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  checkSquare: { width: 32, height: 32, backgroundColor: 'white', borderRadius: 8, alignItems: 'center', justifyContent: 'center', elevation: 1 },
-  toggleText: { fontSize: 11, fontWeight: '800', color: '#64748b' },
-  checklistHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginLeft: 4, marginTop: 8 },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginBottom: 6,
+  },
+  toggleLabelGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  checkSquare: {
+    width: 26,
+    height: 26,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0f172a', lineHeight: 20 },
+  checklistHeader: { marginBottom: 12 },
+  helperText: { fontSize: 12, color: '#94a3b8', marginTop: 4, fontWeight: '600' },
   checkListContainer: { gap: 10 },
-  checkRow: { flexDirection: 'row', gap: 12 },
-  checkInputWrapper: { flex: 1, height: 44, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#f1f5f9', borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
-  checkDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#e2e8f0', marginRight: 12 },
-  checkInput: { flex: 1, height: '100%', fontSize: 13, fontWeight: '700', color: '#0f172a' },
-  deleteTaskBtn: { width: 44, height: 44, backgroundColor: '#f8fafc', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  addTaskBtn: { height: 44, borderStyle: 'dashed', borderWidth: 2, borderColor: '#f1f5f9', borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, marginTop: 4 },
-  addTaskText: { fontSize: 11, fontWeight: '900', color: '#94a3b8' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(255, 255, 255, 0.9)', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 24, paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 40 : 24 },
-  createBtn: { height: 68, backgroundColor: '#2563eb', borderRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, elevation: 8, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 15 },
-  createBtnText: { color: 'white', fontSize: 18, fontWeight: '900' },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  checkInputWrapper: {
+    flex: 1,
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+  },
+  checkDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#cbd5e1' },
+  checkInput: { flex: 1, fontSize: 14, fontWeight: '600', color: '#0f172a', paddingLeft: 12 },
+  deleteTaskBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#fff1f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newTaskComposer: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  addTaskBtn: {
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addTaskBtnDisabled: { opacity: 0.5 },
+  addTaskText: { fontSize: 12, fontWeight: '900', color: '#2563eb', letterSpacing: 0.8 },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(248, 250, 252, 0.96)',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  createBtn: {
+    height: 60,
+    borderRadius: 22,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createBtnDisabled: { opacity: 0.55 },
+  createBtnText: { color: 'white', fontSize: 16, fontWeight: '900' },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.26)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: { flex: 1 },
+  sheetCard: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingTop: 10,
+    maxHeight: '82%',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#cbd5e1',
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  sheetCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetOptions: { maxHeight: 360 },
+  sheetOptionRow: {
+    minHeight: 54,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    marginBottom: 10,
+  },
+  sheetOptionText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0f172a', paddingRight: 8 },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  calendarNavBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  weekdayText: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94a3b8',
+  },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
+  calendarCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  calendarCellEmpty: { opacity: 0 },
+  calendarCellSelected: {
+    backgroundColor: '#2563eb',
+    borderRadius: 16,
+  },
+  calendarCellText: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  calendarCellTextSelected: { color: 'white' },
+  timeSheetContent: { flexDirection: 'row', gap: 16 },
+  timeSelectorColumn: { flex: 1 },
+  timeSelectorLabel: { fontSize: 13, fontWeight: '800', color: '#64748b', marginBottom: 10 },
+  timeChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  timeChip: {
+    minWidth: 58,
+    minHeight: 42,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeChipActive: { backgroundColor: '#eff6ff', borderColor: '#2563eb' },
+  timeChipText: { fontSize: 14, fontWeight: '800', color: '#475569' },
+  timeChipTextActive: { color: '#2563eb' },
+  meridiemRow: { flexDirection: 'row', gap: 12, marginTop: 20, marginBottom: 20 },
+  meridiemChip: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  meridiemChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  meridiemChipText: { fontSize: 14, fontWeight: '900', color: '#475569' },
+  meridiemChipTextActive: { color: 'white' },
+  confirmPickerBtn: {
+    minHeight: 52,
+    borderRadius: 18,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmPickerBtnText: { color: 'white', fontSize: 15, fontWeight: '900' },
 });
 
 export default CreateJobScreen;

@@ -3,6 +3,7 @@ import {
   GetCustomersRequest,
   getFieldoreAPI,
 } from '@/src/api/generated';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import {
   Calendar,
@@ -245,12 +246,13 @@ const EmptyState = ({ loading }: { loading: boolean }) => (
 
 const Customers: React.FC = () => {
   const isFetchingRef = useRef(false);
+  const hasFocusedOnceRef = useRef(false);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('All');
   const [cityFilter, setCityFilter] = useState('');
-  const [stateFilter, setStateFilter] = useState('');
+  const [debouncedCityFilter, setDebouncedCityFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [customers, setCustomers] = useState<CustomerCardModel[]>([]);
   const [pageNumber, setPageNumber] = useState(1);
@@ -269,6 +271,14 @@ const Customers: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCityFilter(cityFilter.trim());
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [cityFilter]);
+
   const requestFilters = useMemo<GetCustomersRequest>(
     () => ({
       pageSize: PAGE_SIZE,
@@ -278,10 +288,10 @@ const Customers: React.FC = () => {
         statusFilter === 'All'
           ? null
           : statusFilter === 'Active',
-      city: cityFilter.trim() || null,
-      state: stateFilter.trim() || null,
+      city: debouncedCityFilter || null,
+      state: null,
     }),
-    [debouncedSearch, typeFilter, statusFilter, cityFilter, stateFilter]
+    [debouncedSearch, typeFilter, statusFilter, debouncedCityFilter]
   );
 
   const fetchCustomers = useCallback(async (
@@ -344,6 +354,17 @@ const Customers: React.FC = () => {
     fetchCustomers(1, 'initial');
   }, [fetchCustomers]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedOnceRef.current) {
+        hasFocusedOnceRef.current = true;
+        return;
+      }
+
+      fetchCustomers(1, 'refresh');
+    }, [fetchCustomers])
+  );
+
   const handleRefresh = () => {
     fetchCustomers(1, 'refresh');
   };
@@ -358,14 +379,13 @@ const Customers: React.FC = () => {
     setStatusFilter('All');
     setTypeFilter('All');
     setCityFilter('');
-    setStateFilter('');
+    setDebouncedCityFilter('');
   };
 
   const activeFilterCount = [
     statusFilter !== 'All',
     typeFilter !== 'All',
     cityFilter.trim().length > 0,
-    stateFilter.trim().length > 0,
   ].filter(Boolean).length;
 
   return (
@@ -444,23 +464,16 @@ const Customers: React.FC = () => {
               </View>
             </View>
 
-            <View style={styles.filterInputsRow}>
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>City</Text>
               <View style={styles.filterInputWrapper}>
+                <MapPin size={16} color="#cbd5e1" style={styles.filterInputIcon} />
                 <TextInput
                   style={styles.filterInput}
                   placeholder="Filter by city"
                   placeholderTextColor="#cbd5e1"
                   value={cityFilter}
                   onChangeText={setCityFilter}
-                />
-              </View>
-              <View style={styles.filterInputWrapper}>
-                <TextInput
-                  style={styles.filterInput}
-                  placeholder="Filter by state"
-                  placeholderTextColor="#cbd5e1"
-                  value={stateFilter}
-                  onChangeText={setStateFilter}
                 />
               </View>
             </View>
@@ -574,10 +587,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
     backgroundColor: 'white',
     borderRadius: 24,
-    padding: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#f1f5f9',
-    gap: 14,
+    gap: 16,
   },
   filterSection: { gap: 10 },
   filterLabel: { fontSize: 11, fontWeight: '900', color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase' },
@@ -593,24 +606,34 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   chipText: { fontSize: 12, fontWeight: '800', color: '#64748b' },
   chipTextActive: { color: '#2563eb' },
-  filterInputsRow: { flexDirection: 'row', gap: 10 },
   filterInputWrapper: {
-    flex: 1,
-    height: 48,
+    minHeight: 56,
     backgroundColor: '#f8fafc',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#f1f5f9',
     paddingHorizontal: 14,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  filterInput: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  filterInputIcon: { marginLeft: 2 },
+  filterInput: {
+    flex: 1,
+    minHeight: 56,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
   clearBtn: {
-    alignSelf: 'flex-start',
+    minHeight: 48,
+    alignSelf: 'stretch',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,
     backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   clearBtnText: { fontSize: 12, fontWeight: '800', color: '#475569' },
   errorBox: {

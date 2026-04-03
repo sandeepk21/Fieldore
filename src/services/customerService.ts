@@ -1,5 +1,6 @@
 import {
   CreateCustomerRequest,
+  GetCustomersRequest,
   CustomerAddressResponse,
   CustomerResponse,
   getFieldoreAPI,
@@ -29,6 +30,33 @@ export const createCustomerApi = async (
       error?.response?.data?.message ||
       error?.message ||
       'Something went wrong while creating the customer';
+
+    throw new Error(message);
+  }
+};
+
+export const getCustomersApi = async (
+  payload: GetCustomersRequest
+): Promise<{ data: CustomerResponse[]; totalRecords: number; pageNumber: number; pageSize: number }> => {
+  try {
+    const response = await api.postApiCustomersGetAllCustomers(payload);
+    const result = response.data;
+
+    if (!result.success) {
+      throw new Error(result.message || 'Failed to fetch customers');
+    }
+
+    return {
+      data: result.data?.data || [],
+      totalRecords: result.data?.totalRecords || 0,
+      pageNumber: result.data?.pageNumber || payload.pageNumber || 1,
+      pageSize: result.data?.pageSize || payload.pageSize || 10,
+    };
+  } catch (error: any) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      'Something went wrong while fetching customers';
 
     throw new Error(message);
   }
