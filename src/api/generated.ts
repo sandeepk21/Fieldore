@@ -4,24 +4,15 @@
  * Fieldore API
  * OpenAPI spec version: v1
  */
-import axios from './axiosInstance';
 import type {
   AxiosRequestConfig,
   AxiosResponse
 } from 'axios';
+import { axiosInstance as axios } from './axiosInstance';
 
 export interface AddJobNoteRequest {
   /** @nullable */
   body?: string | null;
-}
-
-export interface AddJobPhotoRequest {
-  /** @nullable */
-  storagePath?: string | null;
-  /** @nullable */
-  caption?: string | null;
-  /** @nullable */
-  takenAt?: string | null;
 }
 
 export interface AddressDto {
@@ -151,6 +142,27 @@ export interface CreateCustomerRequest {
   billingSameAsService?: boolean;
   /** @nullable */
   addresses?: CustomerAddressRequest[] | null;
+}
+
+export interface CreateInvoiceRequest {
+  customerId?: string;
+  /** @nullable */
+  jobId?: string | null;
+  /** @nullable */
+  purchaseOrderNumber?: string | null;
+  /** @nullable */
+  netTerms?: string | null;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  dueOn?: string;
+  taxRate?: number;
+  discountAmount?: number;
+  /** @nullable */
+  notes?: string | null;
+  billingAddress?: InvoiceAddressRequest;
+  /** @nullable */
+  lineItems?: InvoiceLineItemRequest[] | null;
 }
 
 export interface CreateJobRequest {
@@ -294,6 +306,48 @@ export interface DeleteCustomerResponseApiResponse {
   data?: DeleteCustomerResponse;
 }
 
+export interface DeleteInvoiceResponse {
+  invoiceId?: string;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface DeleteInvoiceResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: DeleteInvoiceResponse;
+}
+
+export interface DeleteJobNoteResponse {
+  noteId?: string;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface DeleteJobNoteResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: DeleteJobNoteResponse;
+}
+
+export interface DeleteJobPhotoResponse {
+  photoId?: string;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface DeleteJobPhotoResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: DeleteJobPhotoResponse;
+}
+
 export interface DeleteJobResponse {
   jobId?: string;
   /** @nullable */
@@ -339,6 +393,136 @@ export interface GetCustomersRequest {
   city?: string | null;
   /** @nullable */
   state?: string | null;
+}
+
+export interface InvoiceAddressRequest {
+  /** @nullable */
+  line1?: string | null;
+  /** @nullable */
+  line2?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  stateOrProvince?: string | null;
+  /** @nullable */
+  postalCode?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+}
+
+export interface InvoiceAddressResponse {
+  /** @nullable */
+  line1?: string | null;
+  /** @nullable */
+  line2?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  stateOrProvince?: string | null;
+  /** @nullable */
+  postalCode?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+}
+
+export interface InvoiceCustomerSummaryResponse {
+  id?: string;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  mobilePhone?: string | null;
+}
+
+export interface InvoiceLineItemRequest {
+  sortOrder?: number;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  description?: string | null;
+  quantity?: number;
+  unitRate?: number;
+}
+
+export interface InvoiceLineItemResponse {
+  id?: string;
+  sortOrder?: number;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  description?: string | null;
+  quantity?: number;
+  unitRate?: number;
+  lineTotal?: number;
+}
+
+export interface InvoiceResponse {
+  id?: string;
+  businessId?: string;
+  customerId?: string;
+  /** @nullable */
+  jobId?: string | null;
+  /** @nullable */
+  invoiceNumber?: string | null;
+  /** @nullable */
+  purchaseOrderNumber?: string | null;
+  /** @nullable */
+  netTerms?: string | null;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  dueOn?: string;
+  taxRate?: number;
+  discountAmount?: number;
+  subtotalAmount?: number;
+  taxAmount?: number;
+  totalAmount?: number;
+  balanceDueAmount?: number;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  customerNameSnapshot?: string | null;
+  /** @nullable */
+  customerEmailSnapshot?: string | null;
+  billingAddress?: InvoiceAddressResponse;
+  customer?: InvoiceCustomerSummaryResponse;
+  /** @nullable */
+  lineItems?: InvoiceLineItemResponse[] | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface InvoiceResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: InvoiceResponse;
+}
+
+export interface InvoiceResponsePagedResponse {
+  /** @nullable */
+  data?: InvoiceResponse[] | null;
+  totalRecords?: number;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
+export interface InvoiceResponsePagedResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: InvoiceResponsePagedResponse;
 }
 
 export interface JobAddressRequest {
@@ -536,6 +720,11 @@ export interface LoginRequest {
   password?: string | null;
 }
 
+export interface ReorderJobChecklistRequest {
+  /** @nullable */
+  checklistItemIds?: string[] | null;
+}
+
 export interface ReplaceJobAssignmentsRequest {
   /** @nullable */
   assignments?: JobAssignmentRequest[] | null;
@@ -601,6 +790,37 @@ export interface UpdateCustomerRequest {
   addresses?: CustomerAddressRequest[] | null;
 }
 
+export interface UpdateInvoiceRequest {
+  customerId?: string;
+  /** @nullable */
+  jobId?: string | null;
+  /** @nullable */
+  purchaseOrderNumber?: string | null;
+  /** @nullable */
+  netTerms?: string | null;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  dueOn?: string;
+  taxRate?: number;
+  discountAmount?: number;
+  /** @nullable */
+  notes?: string | null;
+  billingAddress?: InvoiceAddressRequest;
+  /** @nullable */
+  lineItems?: InvoiceLineItemRequest[] | null;
+}
+
+export interface UpdateInvoiceStatusRequest {
+  /** @nullable */
+  status?: string | null;
+}
+
+export interface UpdateJobNoteRequest {
+  /** @nullable */
+  body?: string | null;
+}
+
 export interface UpdateJobRequest {
   customerId?: string;
   /** @nullable */
@@ -641,6 +861,19 @@ export interface UpdateJobStatusRequest {
   actualEndAt?: string | null;
 }
 
+export type PostApiInvoicesGetAllInvoicesParams = {
+PageNumber?: number;
+PageSize?: number;
+Search?: string;
+CustomerId?: string;
+JobId?: string;
+Status?: string;
+IssuedFrom?: string;
+IssuedTo?: string;
+DueFrom?: string;
+DueTo?: string;
+};
+
 export type PostApiJobsGetAllJobsParams = {
 PageNumber?: number;
 PageSize?: number;
@@ -651,6 +884,12 @@ Priority?: string;
 AssignedUserProfileId?: string;
 ScheduledFrom?: string;
 ScheduledTo?: string;
+};
+
+export type PostApiJobsAddPhotoJobIdBody = {
+  File?: Blob;
+  Caption?: string;
+  TakenAt?: string;
 };
 
 export type GetApiLocationsStatesParams = {
@@ -755,6 +994,61 @@ const getHealthDb = <TData = AxiosResponse<void>>(
     );
   }
 
+const postApiInvoicesCreateInvoice = <TData = AxiosResponse<InvoiceResponseApiResponse>>(
+    createInvoiceRequest: CreateInvoiceRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Invoices/create-invoice`,
+      createInvoiceRequest,options
+    );
+  }
+
+const postApiInvoicesGetAllInvoices = <TData = AxiosResponse<InvoiceResponsePagedResponseApiResponse>>(
+    params?: PostApiInvoicesGetAllInvoicesParams, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Invoices/getAll-invoices`,undefined,{
+    ...options,
+        params: {...params, ...options?.params},}
+    );
+  }
+
+const getApiInvoicesGetByIdInvoiceId = <TData = AxiosResponse<InvoiceResponseApiResponse>>(
+    invoiceId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Invoices/getById/${invoiceId}`,options
+    );
+  }
+
+const putApiInvoicesUpdateInvoiceInvoiceId = <TData = AxiosResponse<InvoiceResponseApiResponse>>(
+    invoiceId: string,
+    updateInvoiceRequest: UpdateInvoiceRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/Invoices/update-invoice/${invoiceId}`,
+      updateInvoiceRequest,options
+    );
+  }
+
+const patchApiInvoicesUpdateStatusInvoiceId = <TData = AxiosResponse<InvoiceResponseApiResponse>>(
+    invoiceId: string,
+    updateInvoiceStatusRequest: UpdateInvoiceStatusRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.patch(
+      `/api/Invoices/update-status/${invoiceId}`,
+      updateInvoiceStatusRequest,options
+    );
+  }
+
+const deleteApiInvoicesDeleteInvoiceInvoiceId = <TData = AxiosResponse<DeleteInvoiceResponseApiResponse>>(
+    invoiceId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.delete(
+      `/api/Invoices/delete-invoice/${invoiceId}`,options
+    );
+  }
+
 const postApiJobsCreateJob = <TData = AxiosResponse<JobResponseApiResponse>>(
     createJobRequest: CreateJobRequest, options?: AxiosRequestConfig
  ): Promise<TData> => {
@@ -840,13 +1134,62 @@ const postApiJobsAddNoteJobId = <TData = AxiosResponse<JobNoteResponseApiRespons
     );
   }
 
+const putApiJobsEditNoteJobIdNoteId = <TData = AxiosResponse<JobNoteResponseApiResponse>>(
+    jobId: string,
+    noteId: string,
+    updateJobNoteRequest: UpdateJobNoteRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/Jobs/edit-note/${jobId}/${noteId}`,
+      updateJobNoteRequest,options
+    );
+  }
+
+const deleteApiJobsDeleteNoteJobIdNoteId = <TData = AxiosResponse<DeleteJobNoteResponseApiResponse>>(
+    jobId: string,
+    noteId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.delete(
+      `/api/Jobs/delete-note/${jobId}/${noteId}`,options
+    );
+  }
+
 const postApiJobsAddPhotoJobId = <TData = AxiosResponse<JobPhotoResponseApiResponse>>(
     jobId: string,
-    addJobPhotoRequest: AddJobPhotoRequest, options?: AxiosRequestConfig
- ): Promise<TData> => {
+    postApiJobsAddPhotoJobIdBody: PostApiJobsAddPhotoJobIdBody, options?: AxiosRequestConfig
+ ): Promise<TData> => {const formData = new FormData();
+if(postApiJobsAddPhotoJobIdBody.File !== undefined) {
+ formData.append(`File`, postApiJobsAddPhotoJobIdBody.File)
+ }
+if(postApiJobsAddPhotoJobIdBody.Caption !== undefined) {
+ formData.append(`Caption`, postApiJobsAddPhotoJobIdBody.Caption)
+ }
+if(postApiJobsAddPhotoJobIdBody.TakenAt !== undefined) {
+ formData.append(`TakenAt`, postApiJobsAddPhotoJobIdBody.TakenAt)
+ }
+
     return axios.post(
       `/api/Jobs/add-photo/${jobId}`,
-      addJobPhotoRequest,options
+      formData,options
+    );
+  }
+
+const deleteApiJobsDeletePhotoJobIdPhotoId = <TData = AxiosResponse<DeleteJobPhotoResponseApiResponse>>(
+    jobId: string,
+    photoId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.delete(
+      `/api/Jobs/delete-photo/${jobId}/${photoId}`,options
+    );
+  }
+
+const putApiJobsReorderChecklistJobId = <TData = AxiosResponse<JobResponseApiResponse>>(
+    jobId: string,
+    reorderJobChecklistRequest: ReorderJobChecklistRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/Jobs/reorder-checklist/${jobId}`,
+      reorderJobChecklistRequest,options
     );
   }
 
@@ -868,7 +1211,7 @@ const getApiLocationsStates = <TData = AxiosResponse<StateProvinceLookupResponse
     );
   }
 
-return {postApiAuthLogin,postApiAuthSignup,postApiAuthBusinessRegister,getApiAuthGetBusinessDetails,postApiAuthForgotPassword,postApiCustomersCreateCustomer,postApiCustomersGetAllCustomers,getApiCustomersGetByIdCustomerId,putApiCustomersUpdateCustomerCustomerId,deleteApiCustomersDeleteCustomerCustomerId,getHealthDb,postApiJobsCreateJob,postApiJobsGetAllJobs,getApiJobsGetByIdJobId,putApiJobsUpdateJobJobId,deleteApiJobsDeleteJobJobId,patchApiJobsUpdateStatusJobId,putApiJobsReplaceAssignmentsJobId,putApiJobsReplaceChecklistJobId,postApiJobsAddNoteJobId,postApiJobsAddPhotoJobId,getApiLocationsCountries,getApiLocationsStates}};
+return {postApiAuthLogin,postApiAuthSignup,postApiAuthBusinessRegister,getApiAuthGetBusinessDetails,postApiAuthForgotPassword,postApiCustomersCreateCustomer,postApiCustomersGetAllCustomers,getApiCustomersGetByIdCustomerId,putApiCustomersUpdateCustomerCustomerId,deleteApiCustomersDeleteCustomerCustomerId,getHealthDb,postApiInvoicesCreateInvoice,postApiInvoicesGetAllInvoices,getApiInvoicesGetByIdInvoiceId,putApiInvoicesUpdateInvoiceInvoiceId,patchApiInvoicesUpdateStatusInvoiceId,deleteApiInvoicesDeleteInvoiceInvoiceId,postApiJobsCreateJob,postApiJobsGetAllJobs,getApiJobsGetByIdJobId,putApiJobsUpdateJobJobId,deleteApiJobsDeleteJobJobId,patchApiJobsUpdateStatusJobId,putApiJobsReplaceAssignmentsJobId,putApiJobsReplaceChecklistJobId,postApiJobsAddNoteJobId,putApiJobsEditNoteJobIdNoteId,deleteApiJobsDeleteNoteJobIdNoteId,postApiJobsAddPhotoJobId,deleteApiJobsDeletePhotoJobIdPhotoId,putApiJobsReorderChecklistJobId,getApiLocationsCountries,getApiLocationsStates}};
 export type PostApiAuthLoginResult = AxiosResponse<AuthResponseApiResponse>
 export type PostApiAuthSignupResult = AxiosResponse<AuthResponseApiResponse>
 export type PostApiAuthBusinessRegisterResult = AxiosResponse<AuthResponseApiResponse>
@@ -880,6 +1223,12 @@ export type GetApiCustomersGetByIdCustomerIdResult = AxiosResponse<CustomerRespo
 export type PutApiCustomersUpdateCustomerCustomerIdResult = AxiosResponse<CustomerResponseApiResponse>
 export type DeleteApiCustomersDeleteCustomerCustomerIdResult = AxiosResponse<DeleteCustomerResponseApiResponse>
 export type GetHealthDbResult = AxiosResponse<void>
+export type PostApiInvoicesCreateInvoiceResult = AxiosResponse<InvoiceResponseApiResponse>
+export type PostApiInvoicesGetAllInvoicesResult = AxiosResponse<InvoiceResponsePagedResponseApiResponse>
+export type GetApiInvoicesGetByIdInvoiceIdResult = AxiosResponse<InvoiceResponseApiResponse>
+export type PutApiInvoicesUpdateInvoiceInvoiceIdResult = AxiosResponse<InvoiceResponseApiResponse>
+export type PatchApiInvoicesUpdateStatusInvoiceIdResult = AxiosResponse<InvoiceResponseApiResponse>
+export type DeleteApiInvoicesDeleteInvoiceInvoiceIdResult = AxiosResponse<DeleteInvoiceResponseApiResponse>
 export type PostApiJobsCreateJobResult = AxiosResponse<JobResponseApiResponse>
 export type PostApiJobsGetAllJobsResult = AxiosResponse<JobResponsePagedResponseApiResponse>
 export type GetApiJobsGetByIdJobIdResult = AxiosResponse<JobResponseApiResponse>
@@ -889,6 +1238,10 @@ export type PatchApiJobsUpdateStatusJobIdResult = AxiosResponse<JobResponseApiRe
 export type PutApiJobsReplaceAssignmentsJobIdResult = AxiosResponse<JobResponseApiResponse>
 export type PutApiJobsReplaceChecklistJobIdResult = AxiosResponse<JobResponseApiResponse>
 export type PostApiJobsAddNoteJobIdResult = AxiosResponse<JobNoteResponseApiResponse>
+export type PutApiJobsEditNoteJobIdNoteIdResult = AxiosResponse<JobNoteResponseApiResponse>
+export type DeleteApiJobsDeleteNoteJobIdNoteIdResult = AxiosResponse<DeleteJobNoteResponseApiResponse>
 export type PostApiJobsAddPhotoJobIdResult = AxiosResponse<JobPhotoResponseApiResponse>
+export type DeleteApiJobsDeletePhotoJobIdPhotoIdResult = AxiosResponse<DeleteJobPhotoResponseApiResponse>
+export type PutApiJobsReorderChecklistJobIdResult = AxiosResponse<JobResponseApiResponse>
 export type GetApiLocationsCountriesResult = AxiosResponse<CountryLookupResponseListApiResponse>
 export type GetApiLocationsStatesResult = AxiosResponse<StateProvinceLookupResponseListApiResponse>

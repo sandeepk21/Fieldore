@@ -1,301 +1,418 @@
+import { useFocusEffect } from '@react-navigation/native';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
-    AlertCircle,
-    CheckCircle2,
-    ChevronLeft,
-    Clock,
-    CreditCard,
-    Download,
-    ExternalLink,
-    FileText,
-    LucideIcon,
-    Mail,
-    MapPin,
-    MoreVertical,
-    Send,
+  Briefcase,
+  ChevronLeft,
+  FileText,
+  Mail,
+  MapPin,
+  PenSquare,
 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-    Dimensions,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
+import { InvoiceResponse } from '@/src/api/generated';
+import {
+  formatInvoiceCurrency,
+  formatInvoiceStatusLabel,
+  getInvoiceByIdApi,
+  getInvoiceStatusTone,
+  updateInvoiceStatusApi,
+} from '@/src/services/invoiceService';
 
-// --- Types & Interfaces ---
-type InvoiceStatus = 'Paid' | 'Unpaid' | 'Overdue';
+const STATUS_ACTIONS = ['Draft', 'Sent', 'Viewed', 'Partially Paid', 'Paid', 'Overdue'] as const;
 
-interface InvoiceItem {
-  id: number;
-  name: string;
-  desc: string;
-  qty: number;
-  price: number;
-}
+const formatDisplayDate = (value?: string | null) => {
+  if (!value) return 'Not available';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(date);
+};
 
-interface InvoiceData {
-  number: string;
-  date: string;
-  dueDate: string;
-  customer: {
-    name: string;
-    email: string;
-    address: string;
-    initials: string;
-  };
-  items: InvoiceItem[];
-  taxRate: number;
-  discount: number;
-}
+const formatAddress = (invoice?: InvoiceResponse | null) => {
+  const parts = [
+    invoice?.billingAddress?.line1?.trim(),
+    invoice?.billingAddress?.line2?.trim(),
+    invoice?.billingAddress?.city?.trim(),
+    invoice?.billingAddress?.stateOrProvince?.trim(),
+    invoice?.billingAddress?.postalCode?.trim(),
+    invoice?.billingAddress?.country?.trim(),
+  ].filter(Boolean);
 
-interface StatusConfig {
-  color: string;
-  bg: string;
-  icon: LucideIcon;
-}
+  return parts.length ? parts.join(', ') : 'No billing address';
+};
 
-// --- Main Component ---
+const getCustomerName = (invoice?: InvoiceResponse | null) =>
+  invoice?.customer?.displayName?.trim() ||
+  invoice?.customerNameSnapshot?.trim() ||
+  'Unnamed customer';
+
+const getInvoiceNumber = (invoice?: InvoiceResponse | null) =>
+  invoice?.invoiceNumber?.trim() || invoice?.id || 'Invoice';
+
 const InvoiceDetailScreen: React.FC = () => {
-  const [invoiceStatus, setInvoiceStatus] = useState<InvoiceStatus>('Unpaid');
+  const params = useLocalSearchParams<{ invoiceId?: string }>();
+  const invoiceId = typeof params.invoiceId === 'string' ? params.invoiceId : '';
 
-  const invoice: InvoiceData = {
-    number: "INV-2045",
-    date: "Mar 11, 2026",
-    dueDate: "Mar 25, 2026",
-    customer: {
-      name: "Sarah Johnson",
-      email: "sarah.j@example.com",
-      address: "742 Evergreen Terrace, Springfield",
-      initials: "SJ"
-    },
-    items: [
-      { id: 1, name: "Bathroom Leak Repair", desc: "Labor and diagnostics", qty: 1, price: 280.00 },
-      { id: 2, name: "Copper Piping", desc: "Industrial grade 1/2 inch", qty: 4, price: 45.00 },
-      { id: 3, name: "Emergency Call-out Fee", desc: "After hours service", qty: 1, price: 120.00 }
-    ],
-    taxRate: 0.10,
-    discount: 50.00
-  };
+  const [invoice, setInvoice] = useState<InvoiceResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
-  const subtotal = invoice.items.reduce((acc, item) => acc + (item.qty * item.price), 0);
-  const tax = subtotal * invoice.taxRate;
-  const total = subtotal + tax - invoice.discount;
+  const loadInvoice = useCallback(async () => {
+    if (!invoiceId) {
+      setError('Invoice id is missing.');
+      setInvoice(null);
+      setIsLoading(false);
+      return;
+    }
 
-  const getStatusConfig = (): StatusConfig => {
-    switch (invoiceStatus) {
-      case 'Paid': return { color: '#10b981', bg: '#ecfdf5', icon: CheckCircle2 };
-      case 'Overdue': return { color: '#f43f5e', bg: '#fef2f2', icon: AlertCircle };
-      default: return { color: '#d97706', bg: '#fffbe6', icon: Clock };
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await getInvoiceByIdApi(invoiceId);
+      setInvoice(response);
+    } catch (loadError: any) {
+      setInvoice(null);
+      setError(loadError?.message || 'Failed to load invoice.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [invoiceId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadInvoice();
+    }, [loadInvoice])
+  );
+
+  const currentStatus = formatInvoiceStatusLabel(invoice?.status);
+  const statusTone = useMemo(() => getInvoiceStatusTone(invoice?.status), [invoice?.status]);
+  const subtotal = invoice?.subtotalAmount || 0;
+  const taxAmount = invoice?.taxAmount || 0;
+  const totalAmount = invoice?.totalAmount || 0;
+  const balanceDueAmount = invoice?.balanceDueAmount ?? totalAmount;
+
+  const handleStatusUpdate = async (status: string) => {
+    if (!invoiceId || status === currentStatus) return;
+
+    setUpdatingStatus(status);
+    try {
+      const response = await updateInvoiceStatusApi(invoiceId, { status });
+      setInvoice(response);
+      Alert.alert('Success', `Invoice status updated to ${status}.`);
+    } catch (statusError: any) {
+      Alert.alert('Update failed', statusError?.message || 'Unable to update invoice status.');
+    } finally {
+      setUpdatingStatus(null);
     }
   };
 
-  const status = getStatusConfig();
-  const StatusIcon = status.icon;
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.stateContainer}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={styles.stateText}>Loading invoice...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !invoice) {
+    return (
+      <SafeAreaView style={styles.stateContainer}>
+        <Text style={styles.stateTitle}>Unable to load invoice</Text>
+        <Text style={styles.stateText}>{error || 'Invoice not found.'}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadInvoice}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header Nav */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn}>
-          <ChevronLeft size={20} color="#94a3b8" />
+        <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
+          <ChevronLeft size={20} color="#475569" />
         </TouchableOpacity>
-        
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.invoiceID}>{invoice.number}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-            <StatusIcon size={12} color={status.color} />
-            <Text style={[styles.statusText, { color: status.color }]}>{invoiceStatus.toUpperCase()}</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.headerBtn}>
-          <MoreVertical size={20} color="#94a3b8" />
+        <Text style={styles.headerTitle}>Invoice Details</Text>
+        <TouchableOpacity
+          style={styles.iconButton}
+          onPress={() =>
+            router.push({
+              pathname: '../Screens/CreateInvoiceScreen',
+              params: { invoiceId },
+            })
+          }
+        >
+          <PenSquare size={20} color="#2563eb" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollPadding}>
-        
-        {/* Customer Detail Card */}
-        <View style={styles.customerSection}>
-          <View style={styles.customerInfoRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{invoice.customer.initials}</Text>
-            </View>
-            <View style={styles.customerTextContainer}>
-              <Text style={styles.customerName}>{invoice.customer.name}</Text>
-              <View style={styles.emailRow}>
-                <Mail size={14} color="#cbd5e1" />
-                <Text style={styles.customerEmail}>{invoice.customer.email}</Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.heroCard}>
+          <View style={[styles.statusBadge, { backgroundColor: statusTone.bg, borderColor: statusTone.border }]}>
+            <Text style={[styles.statusText, { color: statusTone.text }]}>{currentStatus.toUpperCase()}</Text>
+          </View>
+          <Text style={styles.invoiceNumber}>{getInvoiceNumber(invoice)}</Text>
+          <Text style={styles.totalAmount}>{formatInvoiceCurrency(totalAmount)}</Text>
+          <Text style={styles.balanceLabel}>Balance due {formatInvoiceCurrency(balanceDueAmount)}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Status Actions</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusRow}>
+            {STATUS_ACTIONS.map(status => {
+              const active = status === currentStatus;
+              const busy = updatingStatus === status;
+              return (
+                <TouchableOpacity
+                  key={status}
+                  style={[styles.statusChip, active && styles.statusChipActive]}
+                  onPress={() => handleStatusUpdate(status)}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <ActivityIndicator size="small" color={active ? '#fff' : '#2563eb'} />
+                  ) : (
+                    <Text style={[styles.statusChipText, active && styles.statusChipTextActive]}>{status}</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Customer</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <View style={[styles.iconBox, { backgroundColor: '#eff6ff' }]}>
+                <FileText size={18} color="#2563eb" />
+              </View>
+              <View style={styles.infoHeaderCopy}>
+                <Text style={styles.infoTitle}>{getCustomerName(invoice)}</Text>
+                <Text style={styles.infoSubtext}>{invoice.customer?.mobilePhone?.trim() || 'No phone added'}</Text>
               </View>
             </View>
-          </View>
-
-          <TouchableOpacity style={styles.addressBox} activeOpacity={0.7}>
-            <MapPin size={16} color="#cbd5e1" />
-            <Text style={styles.addressText}>{invoice.customer.address}</Text>
-            <ExternalLink size={14} color="#2563eb" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Metadata Grid */}
-        <View style={styles.metaGrid}>
-          <View style={styles.metaCard}>
-            <Text style={styles.metaLabel}>ISSUE DATE</Text>
-            <Text style={styles.metaValue}>{invoice.date}</Text>
-          </View>
-          <View style={styles.metaCard}>
-            <Text style={styles.metaLabel}>DUE DATE</Text>
-            <Text style={styles.metaValue}>{invoice.dueDate}</Text>
+            <View style={styles.infoRow}>
+              <Mail size={15} color="#94a3b8" />
+              <Text style={styles.infoBody}>{invoice.customer?.email?.trim() || invoice.customerEmailSnapshot?.trim() || 'No email added'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <MapPin size={15} color="#94a3b8" />
+              <Text style={styles.infoBody}>{formatAddress(invoice)}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Items List */}
-        <View style={styles.itemsSection}>
-          <View style={styles.itemsHeader}>
-            <Text style={styles.itemsTitle}>ITEMIZED SERVICES</Text>
-            <FileText size={16} color="#cbd5e1" />
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Invoice Details</Text>
+          <View style={styles.infoCard}>
+            <DetailRow label="Issued On" value={formatDisplayDate(invoice.issuedOn)} />
+            <DetailRow label="Due On" value={formatDisplayDate(invoice.dueOn)} />
+            <DetailRow label="Net Terms" value={invoice.netTerms?.trim() || 'Not set'} />
+            <DetailRow label="PO Number" value={invoice.purchaseOrderNumber?.trim() || 'Not set'} />
+            <DetailRow label="Job Id" value={invoice.jobId || 'No linked job'} />
           </View>
+        </View>
 
-          {invoice.items.map((item) => (
-            <View key={item.id} style={styles.itemCard}>
-              <View style={styles.itemTopRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemDesc}>{item.desc}</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Line Items</Text>
+          <View style={styles.infoCard}>
+            {invoice.lineItems?.length ? (
+              invoice.lineItems.map(item => (
+                <View key={item.id || `${item.name}-${item.sortOrder}`} style={styles.lineItemRow}>
+                  <View style={styles.lineItemLeft}>
+                    <Text style={styles.lineItemName}>{item.name?.trim() || 'Untitled item'}</Text>
+                    <Text style={styles.lineItemMeta}>
+                      {item.quantity || 0} x {formatInvoiceCurrency(item.unitRate)}
+                    </Text>
+                    {item.description?.trim() ? <Text style={styles.lineItemDescription}>{item.description}</Text> : null}
+                  </View>
+                  <Text style={styles.lineItemTotal}>{formatInvoiceCurrency(item.lineTotal)}</Text>
                 </View>
-                <Text style={styles.itemPrice}>${(item.qty * item.price).toLocaleString()}</Text>
-              </View>
-              <View style={styles.itemBottomRow}>
-                <View style={styles.itemBadge}><Text style={styles.itemBadgeText}>Qty: {item.qty}</Text></View>
-                <View style={styles.itemBadge}><Text style={styles.itemBadgeText}>Rate: ${item.price}</Text></View>
-              </View>
-            </View>
-          ))}
+              ))
+            ) : (
+              <Text style={styles.infoBody}>No line items found.</Text>
+            )}
+          </View>
         </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Totals</Text>
+          <View style={styles.infoCard}>
+            <DetailRow label="Subtotal" value={formatInvoiceCurrency(subtotal)} />
+            <DetailRow label={`Tax (${invoice.taxRate || 0}%)`} value={formatInvoiceCurrency(taxAmount)} />
+            <DetailRow label="Discount" value={formatInvoiceCurrency(invoice.discountAmount)} />
+            <View style={styles.divider} />
+            <DetailRow label="Total" value={formatInvoiceCurrency(totalAmount)} strong />
+            <DetailRow label="Balance Due" value={formatInvoiceCurrency(balanceDueAmount)} strong />
+          </View>
+        </View>
+
+        {(invoice.notes?.trim() || invoice.jobId) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Notes & Reference</Text>
+            <View style={styles.infoCard}>
+              {invoice.jobId ? (
+                <View style={styles.infoRow}>
+                  <Briefcase size={15} color="#94a3b8" />
+                  <Text style={styles.infoBody}>Linked job: {invoice.jobId}</Text>
+                </View>
+              ) : null}
+              {invoice.notes?.trim() ? <Text style={styles.notesText}>{invoice.notes}</Text> : null}
+            </View>
+          </View>
+        )}
       </ScrollView>
-
-      {/* Floating Summary Footer */}
-      <View style={styles.footer}>
-        <View style={styles.summaryBreakdown}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>SUBTOTAL</Text>
-            <Text style={styles.summaryValue}>${subtotal.toLocaleString()}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>TAX (10%)</Text>
-            <Text style={styles.summaryValue}>+${tax.toLocaleString()}</Text>
-          </View>
-          {invoice.discount > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={[styles.summaryLabel, { color: '#f43f5e' }]}>DISCOUNT</Text>
-              <Text style={[styles.summaryValue, { color: '#f43f5e' }]}>-${invoice.discount.toLocaleString()}</Text>
-            </View>
-          )}
-          <View style={styles.totalContainer}>
-            <Text style={styles.totalLabel}>TOTAL AMOUNT</Text>
-            <Text style={styles.totalValue}>${total.toLocaleString()}</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionArea}>
-          <View style={styles.btnRow}>
-            <TouchableOpacity 
-              style={styles.paymentBtn} 
-              onPress={() => setInvoiceStatus('Paid')}
-              activeOpacity={0.8}
-            >
-              <CreditCard size={18} color="white" />
-              <Text style={styles.paymentBtnText}>Record Payment</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.downloadBtn}>
-              <Download size={20} color="white" />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.sendBtn} activeOpacity={0.9}>
-            <Text style={styles.sendBtnText}>Send Invoice</Text>
-            <Send size={18} color="white" />
-          </TouchableOpacity>
-        </View>
-      </View>
     </SafeAreaView>
   );
 };
 
+const DetailRow = ({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) => (
+  <View style={styles.detailRow}>
+    <Text style={[styles.detailLabel, strong && styles.detailLabelStrong]}>{label}</Text>
+    <Text style={[styles.detailValue, strong && styles.detailValueStrong]}>{value}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'white' },
-  scrollPadding: { paddingBottom: 320 },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 60,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#f8fafc',
+    borderBottomColor: '#e2e8f0',
   },
-  headerBtn: { width: 40, height: 40, backgroundColor: '#f8fafc', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  headerTitleContainer: { alignItems: 'center' },
-  invoiceID: { fontSize: 10, fontWeight: '900', color: '#cbd5e1', letterSpacing: 1.5 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 4 },
-  statusText: { fontSize: 10, fontWeight: '900' },
-  customerSection: { padding: 24 },
-  customerInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24 },
-  avatar: { width: 64, height: 64, backgroundColor: '#2563eb', borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 24, fontWeight: '900', color: 'white' },
-  customerTextContainer: { flex: 1 },
-  customerName: { fontSize: 20, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 },
-  emailRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  customerEmail: { fontSize: 14, color: '#94a3b8', fontWeight: '500' },
-  addressBox: { backgroundColor: '#f8fafc', padding: 16, borderRadius: 24, flexDirection: 'row', gap: 12, borderWidth: 1, borderColor: '#f1f5f9' },
-  addressText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#64748b', lineHeight: 18 },
-  metaGrid: { flexDirection: 'row', paddingHorizontal: 24, gap: 16, marginBottom: 32 },
-  metaCard: { flex: 1, backgroundColor: 'white', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: '#f1f5f9' },
-  metaLabel: { fontSize: 10, fontWeight: '900', color: '#cbd5e1', letterSpacing: 1, marginBottom: 4 },
-  metaValue: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  itemsSection: { paddingHorizontal: 24 },
-  itemsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
-  itemsTitle: { fontSize: 12, fontWeight: '900', color: '#0f172a', letterSpacing: 1 },
-  itemCard: { backgroundColor: 'white', padding: 20, borderRadius: 28, borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 16 },
-  itemTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  itemName: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  itemDesc: { fontSize: 11, color: '#94a3b8', marginTop: 2, fontWeight: '500' },
-  itemPrice: { fontSize: 14, fontWeight: '900', color: '#0f172a' },
-  itemBottomRow: { flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: '#f8fafc', paddingTop: 12 },
-  itemBadge: { backgroundColor: '#f8fafc', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  itemBadgeText: { fontSize: 10, fontWeight: '700', color: '#94a3b8' },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  heroCard: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    alignItems: 'center',
   },
-  summaryBreakdown: { marginBottom: 24, paddingHorizontal: 4 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  summaryLabel: { fontSize: 10, fontWeight: '800', color: '#94a3b8', letterSpacing: 1 },
-  summaryValue: { fontSize: 12, fontWeight: '900', color: '#0f172a' },
-  totalContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f8fafc' },
-  totalLabel: { fontSize: 13, fontWeight: '900', color: '#0f172a', letterSpacing: 0.5 },
-  totalValue: { fontSize: 24, fontWeight: '900', color: '#2563eb' },
-  actionArea: { gap: 12 },
-  btnRow: { flexDirection: 'row', gap: 12 },
-  paymentBtn: { flex: 1, height: 56, backgroundColor: '#10b981', borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  paymentBtnText: { color: 'white', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
-  downloadBtn: { width: 56, height: 56, backgroundColor: '#0f172a', borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  sendBtn: { height: 64, backgroundColor: '#2563eb', borderRadius: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
-  sendBtnText: { color: 'white', fontSize: 18, fontWeight: '900' },
+  statusBadge: {
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  statusText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
+  invoiceNumber: { marginTop: 14, fontSize: 14, fontWeight: '800', color: '#64748b' },
+  totalAmount: { marginTop: 8, fontSize: 34, fontWeight: '900', color: '#0f172a' },
+  balanceLabel: { marginTop: 8, fontSize: 14, fontWeight: '700', color: '#475569' },
+  section: { marginTop: 18 },
+  sectionLabel: { fontSize: 14, fontWeight: '900', color: '#334155', marginBottom: 10, textTransform: 'uppercase' },
+  statusRow: { gap: 10, paddingRight: 20 },
+  statusChip: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  statusChipText: { color: '#2563eb', fontWeight: '800', fontSize: 13 },
+  statusChipTextActive: { color: '#fff' },
+  infoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 18,
+  },
+  infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  iconBox: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  infoHeaderCopy: { flex: 1 },
+  infoTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  infoSubtext: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '600' },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
+  infoBody: { flex: 1, fontSize: 14, color: '#475569', lineHeight: 21, fontWeight: '600' },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16, marginBottom: 12 },
+  detailLabel: { flex: 1, fontSize: 14, color: '#64748b', fontWeight: '600' },
+  detailLabelStrong: { color: '#0f172a', fontWeight: '800' },
+  detailValue: { flex: 1, fontSize: 14, color: '#0f172a', textAlign: 'right', fontWeight: '700' },
+  detailValueStrong: { fontSize: 16, fontWeight: '900' },
+  lineItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 12,
+  },
+  lineItemLeft: { flex: 1 },
+  lineItemName: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
+  lineItemMeta: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '600' },
+  lineItemDescription: { marginTop: 6, fontSize: 13, color: '#475569', lineHeight: 20 },
+  lineItemTotal: { fontSize: 15, fontWeight: '900', color: '#0f172a' },
+  divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 6 },
+  notesText: { marginTop: 10, fontSize: 14, color: '#475569', lineHeight: 22, fontWeight: '600' },
+  stateContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  stateTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
+  stateText: { marginTop: 10, fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22 },
+  retryButton: {
+    marginTop: 18,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  retryButtonText: { color: '#fff', fontWeight: '800' },
 });
 
 export default InvoiceDetailScreen;

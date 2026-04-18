@@ -8,9 +8,8 @@ import {
   MoreHorizontal,
   Plus,
   Search,
-  SlidersHorizontal,
   User,
-  X,
+  X
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -27,8 +26,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { JobResponse, PostApiJobsGetAllJobsParams } from '@/src/api/generated';
 import { getJobCustomerName, getJobDisplayTitle, getJobsApi } from '@/src/services/jobService';
-
-type StatusFilter = 'All' | 'Scheduled' | 'In Progress' | 'Completed' | 'Cancelled';
+import { Calendar as RNCalendar } from 'react-native-calendars';
+type StatusFilter = 'All' | 'Scheduled' | 'InProgress' | 'Completed' | 'Cancelled';
 
 type JobCardModel = {
   id: string;
@@ -41,7 +40,7 @@ type JobCardModel = {
 };
 
 const PAGE_SIZE = 10;
-const STATUS_FILTERS: StatusFilter[] = ['All', 'Scheduled', 'In Progress', 'Completed', 'Cancelled'];
+const STATUS_FILTERS: StatusFilter[] = ['All', 'Scheduled', 'InProgress', 'Completed', 'Cancelled'];
 
 const formatJobDate = (value?: string | null) => {
   if (!value) return 'No date';
@@ -96,13 +95,13 @@ const mapJobToCard = (job: JobResponse): JobCardModel => ({
 
 const getStatusStyles = (status: string) => {
   switch (status) {
-    case 'In Progress':
+    case 'inprogress':
       return { bg: '#eff6ff', text: '#2563eb', border: '#dbeafe' };
-    case 'Scheduled':
+    case 'scheduled':
       return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
-    case 'Completed':
+    case 'completed':
       return { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0' };
-    case 'Cancelled':
+    case 'cancelled':
       return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
     default:
       return { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' };
@@ -172,6 +171,7 @@ const EmptyState = ({ loading }: { loading: boolean }) => (
 const JobList: React.FC = () => {
   const isFetchingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
+  const flatListRef = useRef<FlatList>(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('All');
@@ -183,7 +183,9 @@ const JobList: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState('');
-
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [scheduleFrom, setScheduleFrom] = useState<string | undefined>();
+  const [scheduleTo, setScheduleTo] = useState<string | undefined>();
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchInput.trim());
@@ -198,6 +200,8 @@ const JobList: React.FC = () => {
       PageSize: PAGE_SIZE,
       Search: debouncedSearch || undefined,
       Status: activeFilter === 'All' ? undefined : activeFilter,
+      ScheduledFrom: scheduleFrom,
+      ScheduledTo: scheduleTo,
     }),
     [activeFilter, debouncedSearch]
   );
@@ -251,7 +255,12 @@ const JobList: React.FC = () => {
     setHasMore(true);
     fetchJobs(1, 'initial');
   }, [fetchJobs]);
-
+  useEffect(() => {
+    setJobs([]);
+    setPageNumber(1);
+    setHasMore(true);
+    fetchJobs(1, 'initial');
+  }, [scheduleFrom, scheduleTo]);
   useFocusEffect(
     useCallback(() => {
       if (!hasFocusedOnceRef.current) {
@@ -259,6 +268,7 @@ const JobList: React.FC = () => {
         return;
       }
 
+      flatListRef.current?.scrollToIndex({ index: 0, animated: false });
       fetchJobs(1, 'refresh');
     }, [fetchJobs])
   );
@@ -306,11 +316,38 @@ const JobList: React.FC = () => {
               </TouchableOpacity>
             )}
           </View>
-          <TouchableOpacity style={styles.filterSettingsBtn}>
-            <SlidersHorizontal size={20} color="#64748b" />
+          <TouchableOpacity
+            style={styles.filterSettingsBtn}
+            onPress={() => setShowCalendar(prev => !prev)}
+          >
+            <Calendar size={20} color="#2563eb" />
           </TouchableOpacity>
         </View>
-
+        {showCalendar && (
+          <View style={{ marginBottom: 15 }}>
+            <RNCalendar
+              onDayPress={(day) => {
+                if (!scheduleFrom || (scheduleFrom && scheduleTo)) {
+                  // start new range
+                  setScheduleFrom(day.dateString);
+                  setScheduleTo(undefined);
+                } else {
+                  // set end date
+                  setScheduleTo(day.dateString);
+                }
+              }}
+              markedDates={{
+                ...(scheduleFrom && {
+                  [scheduleFrom]: { startingDay: true, color: '#2563eb', textColor: 'white' },
+                }),
+                ...(scheduleTo && {
+                  [scheduleTo]: { endingDay: true, color: '#2563eb', textColor: 'white' },
+                }),
+              }}
+              markingType={'period'}
+            />
+          </View>
+        )}
         <FlatList
           data={STATUS_FILTERS}
           horizontal
@@ -319,7 +356,6 @@ const JobList: React.FC = () => {
           contentContainerStyle={styles.filterChipsContainer}
           renderItem={({ item }) => {
             const isActive = activeFilter === item;
-
             return (
               <TouchableOpacity
                 onPress={() => setActiveFilter(item)}
@@ -344,6 +380,7 @@ const JobList: React.FC = () => {
         <JobsSkeleton />
       ) : (
         <FlatList
+          ref={flatListRef}
           data={jobs}
           keyExtractor={item => item.id}
           renderItem={({ item }) => {
@@ -351,7 +388,7 @@ const JobList: React.FC = () => {
 
             return (
               <TouchableOpacity
-                style={styles.jobCard}
+                style={[styles.jobCard]}
                 activeOpacity={0.9}
                 onPress={() => {
                   router.push({
@@ -429,7 +466,6 @@ const JobList: React.FC = () => {
         }}
       >
         <Plus size={24} color="white" strokeWidth={2.5} />
-        <Text style={styles.fabText}>Create Job</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -437,12 +473,12 @@ const JobList: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, backgroundColor: '#F8FAFC' },
+  header: { paddingHorizontal: 15, paddingTop: 5, paddingBottom: 15, backgroundColor: '#F8FAFC' },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 15,
   },
   titleText: { fontSize: 28, fontWeight: '900', color: '#0f172a', letterSpacing: -1 },
   subtitleText: {
@@ -467,7 +503,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 56,
     backgroundColor: 'white',
-    borderRadius: 22,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -508,10 +544,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   errorText: { fontSize: 12, color: '#b91c1c', fontWeight: '700' },
-  scrollContent: { paddingHorizontal: 24, paddingBottom: 120, gap: 16 },
+  scrollContent: { paddingHorizontal: 15, paddingBottom: 120, gap: 16, flexGrow: 1 },
   jobCard: {
     backgroundColor: 'white',
-    borderRadius: 24,
+    borderRadius: 28,
     padding: 18,
     borderWidth: 1,
     borderColor: '#f1f5f9',
@@ -523,7 +559,7 @@ const styles = StyleSheet.create({
   customerName: { fontSize: 13, color: '#64748b', fontWeight: '600' },
   statusBadge: {
     alignSelf: 'flex-start',
-    borderRadius: 999,
+    borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 7,

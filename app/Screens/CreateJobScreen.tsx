@@ -1,3 +1,8 @@
+import {
+  CountryLookupResponse,
+  StateProvinceLookupResponse,
+  getFieldoreAPI,
+} from '@/src/api/generated';
 import { router } from 'expo-router';
 import {
   Briefcase,
@@ -89,7 +94,20 @@ type CustomerOption = {
   value: string;
 };
 
-type ActiveSheet = 'customer' | 'jobType' | 'priority' | 'status' | 'duration' | null;
+type SelectOption = {
+  label: string;
+  value: string;
+};
+
+type ActiveSheet =
+  | 'customer'
+  | 'jobType'
+  | 'priority'
+  | 'status'
+  | 'duration'
+  | 'serviceCountry'
+  | 'serviceState'
+  | null;
 
 type TimeParts = {
   hour12: number;
@@ -100,6 +118,7 @@ type TimeParts = {
 const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, index) => index * 5);
+const api = getFieldoreAPI();
 
 const toTwoDigits = (value: number) => String(value).padStart(2, '0');
 
@@ -315,9 +334,13 @@ const CreateJobScreen: React.FC = () => {
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
   const [isDateSheetVisible, setIsDateSheetVisible] = useState(false);
   const [isTimeSheetVisible, setIsTimeSheetVisible] = useState(false);
+  const [isLoadingCountries, setIsLoadingCountries] = useState(false);
+  const [isLoadingServiceStates, setIsLoadingServiceStates] = useState(false);
   const [calendarCursor, setCalendarCursor] = useState(() => new Date());
   const [timeParts, setTimeParts] = useState<TimeParts>({ hour12: 9, minute: 0, meridiem: 'AM' });
   const [pendingChecklistItem, setPendingChecklistItem] = useState('');
+  const [countries, setCountries] = useState<CountryLookupResponse[]>([]);
+  const [serviceStates, setServiceStates] = useState<StateProvinceLookupResponse[]>([]);
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -351,9 +374,99 @@ const CreateJobScreen: React.FC = () => {
     fetchCustomers();
   }, []);
 
+  useEffect(() => {
+    const fetchCountries = async () => {
+      setIsLoadingCountries(true);
+
+      try {
+        const response = await api.getApiLocationsCountries();
+        const result = response.data;
+
+        if (!result.success) {
+          throw new Error(result.message || 'Failed to load countries');
+        }
+
+        setCountries(result.data || []);
+      } catch (error: any) {
+        setErrors(current => ({
+          ...current,
+          server: error?.response?.data?.message || error?.message || 'Failed to load countries.',
+        }));
+      } finally {
+        setIsLoadingCountries(false);
+      }
+    };
+
+    fetchCountries();
+  }, []);
+
+  useEffect(() => {
+    const fetchStates = async () => {
+      if (!formData.serviceCountryCode) {
+        setServiceStates([]);
+        return;
+      }
+
+      setIsLoadingServiceStates(true);
+
+      try {
+        const response = await api.getApiLocationsStates({ countryCode: formData.serviceCountryCode });
+        const result = response.data;
+
+        if (!result.success) {
+          throw new Error(result.message || 'Failed to load states');
+        }
+
+        setServiceStates(result.data || []);
+      } catch (error: any) {
+        setServiceStates([]);
+        setErrors(current => ({
+          ...current,
+          server: error?.response?.data?.message || error?.message || 'Failed to load states.',
+        }));
+      } finally {
+        setIsLoadingServiceStates(false);
+      }
+    };
+
+    fetchStates();
+  }, [formData.serviceCountryCode]);
+
   const selectedCustomerLabel = useMemo(
     () => customers.find(customer => customer.value === formData.customerId)?.label || '',
     [customers, formData.customerId]
+  );
+
+  const selectedServiceCountry = useMemo(
+    () => countries.find(country => country.code === formData.serviceCountryCode),
+    [countries, formData.serviceCountryCode]
+  );
+
+  const selectedServiceState = useMemo(
+    () => serviceStates.find(state => (state.code || '') === formData.serviceStateCode),
+    [formData.serviceStateCode, serviceStates]
+  );
+
+  const countryOptions: SelectOption[] = useMemo(
+    () =>
+      countries
+        .map(country => ({
+          label: country.name || country.code || 'Unknown Country',
+          value: country.code || '',
+        }))
+        .filter(option => option.value),
+    [countries]
+  );
+
+  const serviceStateOptions: SelectOption[] = useMemo(
+    () =>
+      serviceStates
+        .map(state => ({
+          label: state.name || state.code || 'Unknown Province',
+          value: state.code || '',
+        }))
+        .filter(option => option.value),
+    [serviceStates]
   );
 
   const formIsValid = useMemo(
@@ -371,6 +484,12 @@ const CreateJobScreen: React.FC = () => {
 
   const handleFieldChange = useCallback((field: keyof CreateJobFormData, value: string | boolean | string[]) => {
     const nextData = { ...formData, [field]: value } as CreateJobFormData;
+
+    if (field === 'useCustomerPrimaryAddress' && value) {
+      nextData.serviceCountryCode = '';
+      nextData.serviceStateCode = '';
+    }
+
     setFormData(nextData);
 
     const fieldError = validateJobField(field, nextData[field], nextData);
@@ -527,10 +646,39 @@ const CreateJobScreen: React.FC = () => {
             },
           })),
         };
+      case 'serviceCountry':
+        return {
+          title: 'Select Country',
+          options: countryOptions.map(option => ({
+            ...option,
+            selected: formData.serviceCountryCode === option.value,
+            onSelect: () => {
+              setFormData(current => ({
+                ...current,
+                serviceCountryCode: option.value,
+                serviceStateCode: '',
+              }));
+              setErrors({});
+              setActiveSheet(null);
+            },
+          })),
+        };
+      case 'serviceState':
+        return {
+          title: 'Select State / Province',
+          options: serviceStateOptions.map(option => ({
+            ...option,
+            selected: formData.serviceStateCode === option.value,
+            onSelect: () => {
+              handleFieldChange('serviceStateCode', option.value);
+              setActiveSheet(null);
+            },
+          })),
+        };
       default:
         return null;
     }
-  }, [activeSheet, customers, formData, handleFieldChange]);
+  }, [activeSheet, countryOptions, customers, formData, handleFieldChange, serviceStateOptions]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -698,13 +846,23 @@ const CreateJobScreen: React.FC = () => {
                   </View>
 
                   <View style={{ flex: 1 }}>
-                    <InputField
+                    <TriggerField
                       label="State / Province"
-                      placeholder="Texas"
+                      placeholder="Select state / province"
+                      icon={MapPin}
                       required
-                      value={formData.serviceState}
-                      onChangeText={value => handleFieldChange('serviceState', value)}
-                      error={errors.serviceState}
+                      value={selectedServiceState?.name || ''}
+                      onPress={() => {
+                        if (!formData.serviceCountryCode) {
+                          setErrors({ serviceCountryCode: 'Please select country first' });
+                          return;
+                        }
+
+                        setActiveSheet('serviceState');
+                      }}
+                      error={errors.serviceStateCode}
+                      disabled={!formData.serviceCountryCode || isLoadingServiceStates}
+                      loading={isLoadingServiceStates}
                     />
                   </View>
                 </View>
@@ -723,13 +881,16 @@ const CreateJobScreen: React.FC = () => {
                   </View>
 
                   <View style={{ flex: 1 }}>
-                    <InputField
+                    <TriggerField
                       label="Country"
-                      placeholder="USA"
+                      placeholder="Select country"
+                      icon={MapPin}
                       required
-                      value={formData.serviceCountry}
-                      onChangeText={value => handleFieldChange('serviceCountry', value)}
-                      error={errors.serviceCountry}
+                      value={selectedServiceCountry?.name || ''}
+                      onPress={() => setActiveSheet('serviceCountry')}
+                      error={errors.serviceCountryCode}
+                      disabled={isLoadingCountries}
+                      loading={isLoadingCountries}
                     />
                   </View>
                 </View>

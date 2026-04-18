@@ -247,6 +247,7 @@ const EmptyState = ({ loading }: { loading: boolean }) => (
 const Customers: React.FC = () => {
   const isFetchingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
+  const flatListRef = useRef<FlatList>(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
@@ -361,6 +362,7 @@ const Customers: React.FC = () => {
         return;
       }
 
+      flatListRef.current?.scrollToIndex({ index: 0, animated: false });
       fetchCustomers(1, 'refresh');
     }, [fetchCustomers])
   );
@@ -495,6 +497,7 @@ const Customers: React.FC = () => {
         <CustomersSkeleton />
       ) : (
         <FlatList
+          ref={flatListRef}
           data={customers}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <CustomerCard customer={item} />}
@@ -526,7 +529,6 @@ const Customers: React.FC = () => {
         }}
       >
         <UserPlus size={24} color="white" strokeWidth={2.5} />
-        <Text style={styles.fabText}>Add Customer</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -534,8 +536,8 @@ const Customers: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  header: { paddingHorizontal: 15, paddingTop: 15, paddingBottom: 16 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   titleText: { fontSize: 28, fontWeight: '900', color: '#0f172a', letterSpacing: -1 },
   countText: { fontSize: 11, fontWeight: '800', color: '#94a3b8', letterSpacing: 1, marginTop: 4 },
   moreBtn: {
@@ -553,7 +555,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 56,
     backgroundColor: 'white',
-    borderRadius: 22,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -645,7 +647,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   errorText: { color: '#b91c1c', fontSize: 12, fontWeight: '700' },
-  scrollContent: { paddingHorizontal: 24, paddingBottom: 160, gap: 16, flexGrow: 1 },
+  scrollContent: { paddingHorizontal: 15, paddingBottom: 160, gap: 16, flexGrow: 1 },
   skeletonBlock: {
     backgroundColor: '#e2e8f0',
     borderRadius: 12,

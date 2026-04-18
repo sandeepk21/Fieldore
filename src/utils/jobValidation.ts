@@ -15,9 +15,9 @@ export type CreateJobFormData = {
   useCustomerPrimaryAddress: boolean;
   serviceAddress: string;
   serviceCity: string;
-  serviceState: string;
+  serviceStateCode: string;
   servicePostalCode: string;
-  serviceCountry: string;
+  serviceCountryCode: string;
   description: string;
   checklist: string[];
 };
@@ -58,9 +58,9 @@ export const createInitialJobFormData = (): CreateJobFormData => ({
   useCustomerPrimaryAddress: true,
   serviceAddress: '',
   serviceCity: '',
-  serviceState: '',
+  serviceStateCode: '',
   servicePostalCode: '',
-  serviceCountry: '',
+  serviceCountryCode: '',
   description: '',
   checklist: ['Initial inspection', 'Safety check'],
 });
@@ -105,7 +105,7 @@ export const validateJobField = (
       if (data.useCustomerPrimaryAddress) return '';
       if (!String(value).trim()) return 'City is required';
       return '';
-    case 'serviceState':
+    case 'serviceStateCode':
       if (data.useCustomerPrimaryAddress) return '';
       if (!String(value).trim()) return 'State/Province is required';
       return '';
@@ -114,7 +114,7 @@ export const validateJobField = (
       if (!String(value).trim()) return 'Postal code is required';
       if (!POSTAL_REGEX.test(String(value).trim())) return 'Enter a valid postal code';
       return '';
-    case 'serviceCountry':
+    case 'serviceCountryCode':
       if (data.useCustomerPrimaryAddress) return '';
       if (!String(value).trim()) return 'Country is required';
       return '';
@@ -143,9 +143,9 @@ export const validateCreateJobForm = (data: CreateJobFormData): CreateJobFormErr
     'estimatedDurationMinutes',
     'serviceAddress',
     'serviceCity',
-    'serviceState',
+    'serviceStateCode',
     'servicePostalCode',
-    'serviceCountry',
+    'serviceCountryCode',
     'description',
     'checklist',
   ];
@@ -208,9 +208,9 @@ export const buildCreateJobPayload = (data: CreateJobFormData): CreateJobRequest
       : {
           line1: data.serviceAddress.trim(),
           city: data.serviceCity.trim(),
-          stateOrProvince: data.serviceState.trim(),
+          stateOrProvince: data.serviceStateCode.trim(),
           postalCode: data.servicePostalCode.trim(),
-          country: data.serviceCountry.trim(),
+          country: data.serviceCountryCode.trim(),
         },
     description: data.description.trim() || null,
     checklistItems: buildChecklistPayload(data.checklist),
