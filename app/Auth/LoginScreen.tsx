@@ -121,7 +121,11 @@ const LoginScreen = () => {
   };
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar
+              translucent
+              backgroundColor="transparent"
+              barStyle="dark-content"
+            />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}

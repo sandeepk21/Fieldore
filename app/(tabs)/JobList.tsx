@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  SlidersHorizontal,
   User,
   X
 } from 'lucide-react-native';
@@ -15,18 +16,25 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
   RefreshControl,
-  StatusBar,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
+import { Calendar as RNCalendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { JobResponse, PostApiJobsGetAllJobsParams } from '@/src/api/generated';
+import SideFilterSheet from '@/src/components/SideFilterSheet';
 import { getJobCustomerName, getJobDisplayTitle, getJobsApi } from '@/src/services/jobService';
-import { Calendar as RNCalendar } from 'react-native-calendars';
+
+// Date filter presets
+const DATE_PRESET_OPTIONS = ['This Week', 'This Month', '3 Months', 'Custom Range'] as const;
+type DatePresetOption = (typeof DATE_PRESET_OPTIONS)[number] | null;
+type DateFieldKey = 'scheduledFrom' | 'scheduledTo';
+
 type StatusFilter = 'All' | 'Scheduled' | 'InProgress' | 'Completed' | 'Cancelled';
 
 type JobCardModel = {
@@ -42,12 +50,67 @@ type JobCardModel = {
 const PAGE_SIZE = 10;
 const STATUS_FILTERS: StatusFilter[] = ['All', 'Scheduled', 'InProgress', 'Completed', 'Cancelled'];
 
+// Helper functions
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getStartOfWeek = (date: Date) => {
+  const start = new Date(date);
+  const day = start.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+};
+
+const getDatePresetRange = (preset: Exclude<DatePresetOption, null>) => {
+  const today = new Date();
+  const end = new Date(today);
+  end.setHours(0, 0, 0, 0);
+
+  if (preset === 'This Week') {
+    return {
+      scheduledFrom: toDateKey(getStartOfWeek(today)),
+      scheduledTo: toDateKey(end),
+    };
+  }
+  if (preset === 'This Month') {
+    return {
+      scheduledFrom: toDateKey(new Date(today.getFullYear(), today.getMonth(), 1)),
+      scheduledTo: toDateKey(end),
+    };
+  }
+  if (preset === '3 Months') {
+    return {
+      scheduledFrom: toDateKey(new Date(today.getFullYear(), today.getMonth() - 2, 1)),
+      scheduledTo: toDateKey(end),
+    };
+  }
+  return {
+    scheduledFrom: '',
+    scheduledTo: '',
+  };
+};
+
+const formatFilterDateLabel = (value: string) => {
+  if (!value) return 'Select date';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(date);
+};
+
 const formatJobDate = (value?: string | null) => {
   if (!value) return 'No date';
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'No date';
-
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: '2-digit',
@@ -57,29 +120,19 @@ const formatJobDate = (value?: string | null) => {
 
 const formatJobTimeRange = (start?: string | null, end?: string | null) => {
   if (!start) return 'No time';
-
   const startDate = new Date(start);
   if (Number.isNaN(startDate.getTime())) return 'No time';
-
   const startLabel = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
   }).format(startDate);
-
-  if (!end) {
-    return startLabel;
-  }
-
+  if (!end) return startLabel;
   const endDate = new Date(end);
-  if (Number.isNaN(endDate.getTime())) {
-    return startLabel;
-  }
-
+  if (Number.isNaN(endDate.getTime())) return startLabel;
   const endLabel = new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
   }).format(endDate);
-
   return `${startLabel} - ${endLabel}`;
 };
 
@@ -94,7 +147,7 @@ const mapJobToCard = (job: JobResponse): JobCardModel => ({
 });
 
 const getStatusStyles = (status: string) => {
-  switch (status) {
+  switch (status.toLowerCase()) {
     case 'inprogress':
       return { bg: '#eff6ff', text: '#2563eb', border: '#dbeafe' };
     case 'scheduled':
@@ -108,6 +161,7 @@ const getStatusStyles = (status: string) => {
   }
 };
 
+// Skeleton components
 const SkeletonBlock = ({
   height,
   width,
@@ -129,9 +183,7 @@ const JobCardSkeleton = () => (
       </View>
       <SkeletonBlock height={24} width={92} style={styles.skeletonBadge} />
     </View>
-
     <View style={styles.cardDivider} />
-
     <View style={styles.cardBottom}>
       <View style={styles.metaInfoRow}>
         <View style={styles.metaItem}>
@@ -183,14 +235,24 @@ const JobList: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState('');
-  const [showCalendar, setShowCalendar] = useState(false);
+
+  // Filter sheet state
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedDatePreset, setSelectedDatePreset] = useState<DatePresetOption>(null);
+  const [activeDateField, setActiveDateField] = useState<DateFieldKey | null>(null);
   const [scheduleFrom, setScheduleFrom] = useState<string | undefined>();
   const [scheduleTo, setScheduleTo] = useState<string | undefined>();
+
+  const activeFilterCount = useMemo(
+    () => [scheduleFrom, scheduleTo].filter(Boolean).length,
+    [scheduleFrom, scheduleTo]
+  );
+
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchInput.trim());
     }, 350);
-
     return () => clearTimeout(timer);
   }, [searchInput]);
 
@@ -203,17 +265,14 @@ const JobList: React.FC = () => {
       ScheduledFrom: scheduleFrom,
       ScheduledTo: scheduleTo,
     }),
-    [activeFilter, debouncedSearch]
+    [activeFilter, debouncedSearch, scheduleFrom, scheduleTo]
   );
 
   const fetchJobs = useCallback(async (
     nextPage: number,
     mode: 'initial' | 'refresh' | 'loadMore' = 'initial'
   ) => {
-    if (isFetchingRef.current) {
-      return;
-    }
-
+    if (isFetchingRef.current) return;
     isFetchingRef.current = true;
 
     if (mode === 'initial') setIsLoading(true);
@@ -249,29 +308,26 @@ const JobList: React.FC = () => {
     }
   }, [requestFilters]);
 
+  // Initial fetch & refetch when filters change
   useEffect(() => {
     setJobs([]);
     setPageNumber(1);
     setHasMore(true);
     fetchJobs(1, 'initial');
   }, [fetchJobs]);
-  useEffect(() => {
-    setJobs([]);
-    setPageNumber(1);
-    setHasMore(true);
-    fetchJobs(1, 'initial');
-  }, [scheduleFrom, scheduleTo]);
-  useFocusEffect(
-    useCallback(() => {
-      if (!hasFocusedOnceRef.current) {
-        hasFocusedOnceRef.current = true;
-        return;
-      }
 
-      flatListRef.current?.scrollToIndex({ index: 0, animated: false });
-      fetchJobs(1, 'refresh');
-    }, [fetchJobs])
-  );
+  // Focus effect to refresh when screen comes into focus
+  useFocusEffect(
+  useCallback(() => {
+    if (!hasFocusedOnceRef.current) {
+      hasFocusedOnceRef.current = true;
+      return;
+    }
+
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    fetchJobs(1, 'refresh');
+  }, [fetchJobs])
+);
 
   const handleRefresh = () => {
     fetchJobs(1, 'refresh');
@@ -283,11 +339,40 @@ const JobList: React.FC = () => {
     }
   };
 
+  const clearDateFilters = () => {
+    setScheduleFrom(undefined);
+    setScheduleTo(undefined);
+    setSelectedDatePreset(null);
+    setActiveDateField(null);
+  };
+
+  const applyDatePreset = (preset: Exclude<DatePresetOption, null>) => {
+    if (preset === 'Custom Range') {
+      setSelectedDatePreset(preset);
+      setActiveDateField('scheduledFrom');
+      return;
+    }
+
+    const range = getDatePresetRange(preset);
+    setScheduleFrom(range.scheduledFrom);
+    setScheduleTo(range.scheduledTo);
+    setSelectedDatePreset(preset);
+    setActiveDateField(null);
+  };
+
+  const handleDatePick = (field: DateFieldKey, value: string) => {
+    if (field === 'scheduledFrom') {
+      setScheduleFrom(value);
+    } else {
+      setScheduleTo(value);
+    }
+    setSelectedDatePreset('Custom Range');
+  };
+
   const titleCountLabel = activeFilter === 'All' ? 'TOTAL JOBS' : `${activeFilter.toUpperCase()} JOBS`;
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
         <View style={styles.headerTop}>
@@ -316,38 +401,20 @@ const JobList: React.FC = () => {
               </TouchableOpacity>
             )}
           </View>
+
           <TouchableOpacity
-            style={styles.filterSettingsBtn}
-            onPress={() => setShowCalendar(prev => !prev)}
+            style={[styles.filterButton, showFilters && styles.filterButtonActive]}
+            onPress={() => setShowFilters(true)}
           >
-            <Calendar size={20} color="#2563eb" />
+            <SlidersHorizontal size={20} color={showFilters ? '#ffffff' : '#64748b'} />
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
-        {showCalendar && (
-          <View style={{ marginBottom: 15 }}>
-            <RNCalendar
-              onDayPress={(day) => {
-                if (!scheduleFrom || (scheduleFrom && scheduleTo)) {
-                  // start new range
-                  setScheduleFrom(day.dateString);
-                  setScheduleTo(undefined);
-                } else {
-                  // set end date
-                  setScheduleTo(day.dateString);
-                }
-              }}
-              markedDates={{
-                ...(scheduleFrom && {
-                  [scheduleFrom]: { startingDay: true, color: '#2563eb', textColor: 'white' },
-                }),
-                ...(scheduleTo && {
-                  [scheduleTo]: { endingDay: true, color: '#2563eb', textColor: 'white' },
-                }),
-              }}
-              markingType={'period'}
-            />
-          </View>
-        )}
+
         <FlatList
           data={STATUS_FILTERS}
           horizontal
@@ -385,7 +452,6 @@ const JobList: React.FC = () => {
           keyExtractor={item => item.id}
           renderItem={({ item }) => {
             const statusStyle = getStatusStyles(item.status);
-
             return (
               <TouchableOpacity
                 style={[styles.jobCard]}
@@ -458,6 +524,103 @@ const JobList: React.FC = () => {
         />
       )}
 
+      <SideFilterSheet
+        visible={showFilters}
+        title="Filters"
+        subtitle="Filter jobs by scheduled date range."
+        badgeCount={activeFilterCount}
+        onClose={() => setShowFilters(false)}
+        onClear={activeFilterCount > 0 ? clearDateFilters : undefined}
+      >
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+          <View style={styles.filterSection}>
+            <Text style={styles.filterLabel}>Scheduled Date</Text>
+            <Text style={styles.filterHelper}>Pick a quick range or set custom dates.</Text>
+
+            <View style={styles.presetGrid}>
+              {DATE_PRESET_OPTIONS.map(option => (
+                <TouchableOpacity
+                  key={option}
+                  style={[styles.presetChip, selectedDatePreset === option && styles.presetChipActive]}
+                  onPress={() => applyDatePreset(option)}
+                >
+                  <Text style={[styles.presetChipText, selectedDatePreset === option && styles.presetChipTextActive]}>
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.filterSection}>
+            <Text style={styles.filterLabel}>Custom Range</Text>
+            <View style={styles.dateColumn}>
+              <TouchableOpacity
+                style={[styles.dateCard, activeDateField === 'scheduledFrom' && styles.dateCardActive]}
+                onPress={() => setActiveDateField(current => (current === 'scheduledFrom' ? null : 'scheduledFrom'))}
+              >
+                <Text style={styles.dateCardLabel}>Scheduled From</Text>
+                <Text style={styles.dateCardValue}>
+                  {scheduleFrom ? formatFilterDateLabel(scheduleFrom) : 'Select date'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.dateCard, activeDateField === 'scheduledTo' && styles.dateCardActive]}
+                onPress={() => setActiveDateField(current => (current === 'scheduledTo' ? null : 'scheduledTo'))}
+              >
+                <Text style={styles.dateCardLabel}>Scheduled To</Text>
+                <Text style={styles.dateCardValue}>
+                  {scheduleTo ? formatFilterDateLabel(scheduleTo) : 'Select date'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {activeDateField && (
+            <View style={styles.calendarCard}>
+              <View style={styles.calendarHeader}>
+                <View>
+                  <Text style={styles.calendarTitle}>
+                    {activeDateField === 'scheduledFrom' ? 'Select Scheduled From' : 'Select Scheduled To'}
+                  </Text>
+                  <Text style={styles.calendarCaption}>Tap one date to update this filter.</Text>
+                </View>
+
+                {(activeDateField === 'scheduledFrom' ? scheduleFrom : scheduleTo) && (
+                  <TouchableOpacity onPress={() => handleDatePick(activeDateField, '')}>
+                    <Text style={styles.clearDateText}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <RNCalendar
+                markedDates={{
+                  ...(activeDateField === 'scheduledFrom' && scheduleFrom && {
+                    [scheduleFrom]: { selected: true, selectedColor: '#2563eb' },
+                  }),
+                  ...(activeDateField === 'scheduledTo' && scheduleTo && {
+                    [scheduleTo]: { selected: true, selectedColor: '#2563eb' },
+                  }),
+                }}
+                onDayPress={day => handleDatePick(activeDateField, day.dateString)}
+                theme={{
+                  backgroundColor: '#f8fafc',
+                  calendarBackground: '#f8fafc',
+                  todayTextColor: '#2563eb',
+                  arrowColor: '#2563eb',
+                  selectedDayBackgroundColor: '#2563eb',
+                  selectedDayTextColor: '#ffffff',
+                  textDayFontWeight: '600',
+                  textMonthFontWeight: '900',
+                  textDayHeaderFontWeight: '700',
+                }}
+              />
+            </View>
+          )}
+        </ScrollView>
+      </SideFilterSheet>
+
       <TouchableOpacity
         style={styles.fab}
         activeOpacity={0.9}
@@ -512,7 +675,7 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 12 },
   searchInput: { flex: 1, height: '100%', fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  filterSettingsBtn: {
+  filterButton: {
     width: 56,
     height: 56,
     backgroundColor: 'white',
@@ -522,6 +685,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
+  filterButtonActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  filterBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
   filterChipsContainer: { paddingRight: 24, gap: 10 },
   chip: {
     paddingHorizontal: 16,
@@ -608,7 +788,58 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 12,
   },
-  fabText: { color: 'white', fontSize: 14, fontWeight: '800' },
+  // Filter sheet styles
+  filterContent: { paddingBottom: 24 },
+  filterSection: { marginBottom: 22 },
+  filterLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  filterHelper: { marginTop: 8, fontSize: 13, lineHeight: 20, color: '#64748b', fontWeight: '600' },
+  presetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
+  presetChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  presetChipActive: { backgroundColor: '#dbeafe', borderColor: '#93c5fd' },
+  presetChipText: { fontSize: 12, fontWeight: '800', color: '#475569' },
+  presetChipTextActive: { color: '#1d4ed8' },
+  dateColumn: { marginTop: 14, gap: 12 },
+  dateCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 16,
+  },
+  dateCardActive: { borderColor: '#93c5fd', backgroundColor: '#eff6ff' },
+  dateCardLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '800', textTransform: 'uppercase' },
+  dateCardValue: { marginTop: 8, fontSize: 15, color: '#0f172a', fontWeight: '700' },
+  calendarCard: {
+    borderRadius: 22,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 12,
+    paddingHorizontal: 4,
+  },
+  calendarTitle: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
+  calendarCaption: { marginTop: 4, fontSize: 12, color: '#64748b', fontWeight: '600' },
+  clearDateText: { fontSize: 12, fontWeight: '800', color: '#2563eb' },
 });
 
 export default JobList;

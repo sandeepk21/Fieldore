@@ -1,43 +1,42 @@
 import {
-  CountryLookupResponse,
-  StateProvinceLookupResponse,
-  getFieldoreAPI,
+    CountryLookupResponse,
+    StateProvinceLookupResponse,
+    getFieldoreAPI,
 } from '@/src/api/generated';
 import { router } from 'expo-router';
 import {
-  Briefcase,
-  Calendar,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  LucideIcon,
-  MapPin,
-  Plus,
-  StickyNote,
-  Timer,
-  Trash2,
-  User,
-  X,
+    Briefcase,
+    Calendar,
+    Check,
+    CheckCircle2,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    Clock,
+    LucideIcon,
+    MapPin,
+    Plus,
+    StickyNote,
+    Timer,
+    Trash2,
+    User,
+    X,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -45,16 +44,16 @@ import { useLoader } from '@/src/context/LoaderContext';
 import { getCustomerDisplayName, getCustomersApi } from '@/src/services/customerService';
 import { createJobApi } from '@/src/services/jobService';
 import {
-  CreateJobFormData,
-  CreateJobFormErrors,
-  DURATION_OPTIONS,
-  JOB_PRIORITY_OPTIONS,
-  JOB_STATUS_OPTIONS,
-  JOB_TYPE_OPTIONS,
-  buildCreateJobPayload,
-  createInitialJobFormData,
-  validateCreateJobForm,
-  validateJobField,
+    CreateJobFormData,
+    CreateJobFormErrors,
+    DURATION_OPTIONS,
+    JOB_PRIORITY_OPTIONS,
+    JOB_STATUS_OPTIONS,
+    JOB_TYPE_OPTIONS,
+    buildCreateJobPayload,
+    createInitialJobFormData,
+    validateCreateJobForm,
+    validateJobField,
 } from '@/src/utils/jobValidation';
 
 interface SectionProps {
@@ -682,7 +681,7 @@ const CreateJobScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>

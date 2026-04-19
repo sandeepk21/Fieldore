@@ -20,14 +20,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FlatList,
   RefreshControl,
-  StatusBar,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import SideFilterSheet from '@/src/components/SideFilterSheet';
 
 type StatusFilter = 'All' | 'Active' | 'Inactive';
 type TypeFilter = 'All' | 'Residential' | 'Commercial';
@@ -52,10 +54,8 @@ const AVATAR_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#4f46e5', '#ef4444', '#
 
 const formatDate = (value?: string) => {
   if (!value) return 'N/A';
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'N/A';
-
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: '2-digit',
@@ -66,7 +66,6 @@ const formatDate = (value?: string) => {
 const getInitials = (first?: string | null, last?: string | null, display?: string | null) => {
   const source = display?.trim() || `${first || ''} ${last || ''}`.trim();
   if (!source) return 'CU';
-
   const parts = source.split(/\s+/).slice(0, 2);
   return parts.map(part => part[0]?.toUpperCase() || '').join('') || 'CU';
 };
@@ -268,7 +267,6 @@ const Customers: React.FC = () => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchInput.trim());
     }, 350);
-
     return () => clearTimeout(timer);
   }, [searchInput]);
 
@@ -276,7 +274,6 @@ const Customers: React.FC = () => {
     const timer = setTimeout(() => {
       setDebouncedCityFilter(cityFilter.trim());
     }, 350);
-
     return () => clearTimeout(timer);
   }, [cityFilter]);
 
@@ -299,10 +296,7 @@ const Customers: React.FC = () => {
     nextPage: number,
     mode: 'initial' | 'refresh' | 'loadMore' = 'initial'
   ) => {
-    if (isFetchingRef.current) {
-      return;
-    }
-
+    if (isFetchingRef.current) return;
     isFetchingRef.current = true;
 
     if (mode === 'initial') setIsLoading(true);
@@ -361,8 +355,7 @@ const Customers: React.FC = () => {
         hasFocusedOnceRef.current = true;
         return;
       }
-
-      flatListRef.current?.scrollToIndex({ index: 0, animated: false });
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
       fetchCustomers(1, 'refresh');
     }, [fetchCustomers])
   );
@@ -392,7 +385,6 @@ const Customers: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
         <View style={styles.headerTop}>
@@ -423,68 +415,12 @@ const Customers: React.FC = () => {
           </View>
           <TouchableOpacity
             style={[styles.filterBtn, activeFilterCount > 0 && styles.filterBtnActive]}
-            onPress={() => setShowFilters(current => !current)}
+            onPress={() => setShowFilters(true)}
           >
             <SlidersHorizontal size={20} color={activeFilterCount > 0 ? '#2563eb' : '#64748b'} />
             {activeFilterCount > 0 && <View style={styles.filterDot} />}
           </TouchableOpacity>
         </View>
-
-        {showFilters && (
-          <View style={styles.filtersPanel}>
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Type</Text>
-              <View style={styles.chipsRow}>
-                {TYPE_FILTERS.map(filter => (
-                  <TouchableOpacity
-                    key={filter}
-                    style={[styles.chip, typeFilter === filter && styles.chipActive]}
-                    onPress={() => setTypeFilter(filter)}
-                  >
-                    <Text style={[styles.chipText, typeFilter === filter && styles.chipTextActive]}>
-                      {filter}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Status</Text>
-              <View style={styles.chipsRow}>
-                {STATUS_FILTERS.map(filter => (
-                  <TouchableOpacity
-                    key={filter}
-                    style={[styles.chip, statusFilter === filter && styles.chipActive]}
-                    onPress={() => setStatusFilter(filter)}
-                  >
-                    <Text style={[styles.chipText, statusFilter === filter && styles.chipTextActive]}>
-                      {filter}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>City</Text>
-              <View style={styles.filterInputWrapper}>
-                <MapPin size={16} color="#cbd5e1" style={styles.filterInputIcon} />
-                <TextInput
-                  style={styles.filterInput}
-                  placeholder="Filter by city"
-                  placeholderTextColor="#cbd5e1"
-                  value={cityFilter}
-                  onChangeText={setCityFilter}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.clearBtn} onPress={clearFilters}>
-              <Text style={styles.clearBtnText}>Clear Filters</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {!!error && (
           <View style={styles.errorBox}>
@@ -520,6 +456,65 @@ const Customers: React.FC = () => {
           }
         />
       )}
+
+      <SideFilterSheet
+        visible={showFilters}
+        title="Filters"
+        subtitle="Filter customers by type, status, or city."
+        badgeCount={activeFilterCount}
+        onClose={() => setShowFilters(false)}
+        onClear={activeFilterCount > 0 ? clearFilters : undefined}
+      >
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+          <View style={styles.filterSection}>
+            <Text style={styles.filterLabel}>Type</Text>
+            <View style={styles.chipsRow}>
+              {TYPE_FILTERS.map(filter => (
+                <TouchableOpacity
+                  key={filter}
+                  style={[styles.chip, typeFilter === filter && styles.chipActive]}
+                  onPress={() => setTypeFilter(filter)}
+                >
+                  <Text style={[styles.chipText, typeFilter === filter && styles.chipTextActive]}>
+                    {filter}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.filterSection}>
+            <Text style={styles.filterLabel}>Status</Text>
+            <View style={styles.chipsRow}>
+              {STATUS_FILTERS.map(filter => (
+                <TouchableOpacity
+                  key={filter}
+                  style={[styles.chip, statusFilter === filter && styles.chipActive]}
+                  onPress={() => setStatusFilter(filter)}
+                >
+                  <Text style={[styles.chipText, statusFilter === filter && styles.chipTextActive]}>
+                    {filter}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.filterSection}>
+            <Text style={styles.filterLabel}>City</Text>
+            <View style={styles.filterInputWrapper}>
+              <MapPin size={16} color="#cbd5e1" style={styles.filterInputIcon} />
+              <TextInput
+                style={styles.filterInput}
+                placeholder="Filter by city"
+                placeholderTextColor="#cbd5e1"
+                value={cityFilter}
+                onChangeText={setCityFilter}
+              />
+            </View>
+          </View>
+        </ScrollView>
+      </SideFilterSheet>
 
       <TouchableOpacity
         style={styles.fab}
@@ -585,59 +580,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#2563eb',
   },
-  filtersPanel: {
-    marginTop: 16,
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    gap: 16,
-  },
-  filterSection: { gap: 10 },
-  filterLabel: { fontSize: 11, fontWeight: '900', color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase' },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  chipActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
-  chipText: { fontSize: 12, fontWeight: '800', color: '#64748b' },
-  chipTextActive: { color: '#2563eb' },
-  filterInputWrapper: {
-    minHeight: 56,
-    backgroundColor: '#f8fafc',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  filterInputIcon: { marginLeft: 2 },
-  filterInput: {
-    flex: 1,
-    minHeight: 56,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  clearBtn: {
-    minHeight: 48,
-    alignSelf: 'stretch',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  clearBtnText: { fontSize: 12, fontWeight: '800', color: '#475569' },
   errorBox: {
     marginTop: 12,
     backgroundColor: '#fff5f5',
@@ -722,6 +664,67 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
   },
   fabText: { color: 'white', fontSize: 14, fontWeight: '900' },
+  // Filter sheet content styles
+  filterContent: {
+    paddingBottom: 24,
+  },
+  filterSection: {
+    marginBottom: 22,
+  },
+  filterLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 10,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  chipActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748b',
+  },
+  chipTextActive: {
+    color: '#2563eb',
+  },
+  filterInputWrapper: {
+    minHeight: 56,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  filterInputIcon: {
+    marginLeft: 2,
+  },
+  filterInput: {
+    flex: 1,
+    minHeight: 56,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
 });
 
 export default Customers;

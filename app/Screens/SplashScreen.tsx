@@ -3,13 +3,12 @@ import {
   Animated,
   Dimensions,
   Easing,
-  StatusBar,
   StyleSheet,
   Text,
   View
 } from 'react-native';
 // 1. Import useRouter from expo-router
-import { getUser } from '@/src/utils/storage';
+import { clearAuthData, getUser } from '@/src/utils/storage';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../hooks/useAuth';
 
@@ -83,7 +82,7 @@ const SplashScreen = () => {
             easing: Easing.inOut(Easing.exp),
             useNativeDriver: true,
           }).start(async () => {
-            //clearAuthData();
+            clearAuthData();
             // 5. Trigger Navigation to your onboarding route
             // Replace '/onboarding' with your actual file path in (tabs) or app folder
             console.log('🔹 Navigation Triggered. Authenticated:', isAuthenticated);
@@ -114,7 +113,7 @@ const SplashScreen = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       <Animated.View
         style={[

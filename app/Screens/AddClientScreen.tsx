@@ -1,41 +1,40 @@
 import {
-  CountryLookupResponse,
-  CreateCustomerRequest,
-  getFieldoreAPI,
-  StateProvinceLookupResponse,
+    CountryLookupResponse,
+    CreateCustomerRequest,
+    getFieldoreAPI,
+    StateProvinceLookupResponse,
 } from '@/src/api/generated';
 import { useLoader } from '@/src/context/LoaderContext';
 import { router } from 'expo-router';
 import {
-  Building2,
-  Check,
-  ChevronDown,
-  Dog,
-  LucideIcon,
-  Mail,
-  MapPin,
-  Phone,
-  ShieldCheck,
-  StickyNote,
-  User,
-  X,
+    Building2,
+    Check,
+    ChevronDown,
+    Dog,
+    LucideIcon,
+    Mail,
+    MapPin,
+    Phone,
+    ShieldCheck,
+    StickyNote,
+    User,
+    X,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -708,7 +707,7 @@ const AddClientScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>

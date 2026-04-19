@@ -6,9 +6,15 @@ import {
     Settings,
     Users
 } from "lucide-react-native";
-import { Platform, StyleSheet, Text } from "react-native";
+import { Platform, StatusBar, StyleSheet, Text } from "react-native";
 export default function TabLayout() {
     return (
+        <>
+        <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="dark-content"
+      />
         <Tabs
             screenOptions={({ route }) => ({
                 headerShown: false,
@@ -48,7 +54,7 @@ export default function TabLayout() {
             <Tabs.Screen name="InvoicesListScreen" options={{ title: "InvoicesListScreen" }} />
             <Tabs.Screen name="Settings" options={{ title: "Settings" }} />
         </Tabs>
-
+</>
     );
 }
 
@@ -58,7 +64,7 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        height: Platform.OS === "ios" ? 90 : 70,
+        height: Platform.OS === "ios" ? 90 : 80,
         backgroundColor: "rgba(255,255,255,0.96)",
         borderTopWidth: 1,
         borderTopColor: "#f1f5f9",

@@ -134,7 +134,7 @@ const SignUpScreen = () => {
     confirmPassword: '',
   });
   const [errors, setErrors] = useState<FormErrors>({});
-const { showLoader, hideLoader } = useLoader();
+  const { showLoader, hideLoader } = useLoader();
   // Real-time validation for only the changed field
   const handleInputChange = (name: keyof FormData, value: string) => {
     const updatedData = { ...formData, [name]: value };
@@ -154,7 +154,7 @@ const { showLoader, hideLoader } = useLoader();
   const handleSubmit = async () => {
 
     const finalErrors = validateSignup(formData);
-showLoader();
+    showLoader();
     if (Object.keys(finalErrors).length > 0) {
       setErrors(finalErrors);
       hideLoader();
@@ -187,7 +187,11 @@ showLoader();
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="dark-content"
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

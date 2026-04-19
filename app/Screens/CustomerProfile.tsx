@@ -1,26 +1,26 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-  ChevronLeft,
-  Mail,
-  MapPin,
-  MoreVertical,
-  Phone,
-  Plus,
-  StickyNote,
+    ChevronLeft,
+    Mail,
+    MapPin,
+    MoreVertical,
+    Phone,
+    Plus,
+    StickyNote,
 } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
-import { Linking, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CustomerResponse } from '@/src/api/generated';
 import {
-  formatCustomerAddress,
-  getBillingCustomerAddress,
-  getCustomerByIdApi,
-  getCustomerDisplayName,
-  getCustomerInitials,
-  getPrimaryCustomerAddress,
+    formatCustomerAddress,
+    getBillingCustomerAddress,
+    getCustomerByIdApi,
+    getCustomerDisplayName,
+    getCustomerInitials,
+    getPrimaryCustomerAddress,
 } from '@/src/services/customerService';
 
 type TabType = 'Jobs' | 'Invoices' | 'Estimates' | 'Notes';
@@ -179,7 +179,7 @@ const CustomerProfile: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       <View style={styles.navHeader}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>

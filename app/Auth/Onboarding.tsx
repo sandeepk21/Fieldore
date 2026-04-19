@@ -14,6 +14,7 @@ import {
   Animated,
   Dimensions,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -202,7 +203,11 @@ export default function Onboarding() {
 
   return (
     <View style={styles.container}>
-       
+       <StatusBar
+                     translucent
+                     backgroundColor="transparent"
+                     barStyle="dark-content"
+                   />
       <View style={styles.header}>
         {current < screens.length - 1 ? (
           <TouchableOpacity onPress={() => goTo(screens.length - 1)}>

@@ -1,24 +1,23 @@
 import { router } from 'expo-router';
 import {
-  Bell,
-  Briefcase,
-  ChevronRight,
-  CreditCard,
-  LogOut,
-  LucideIcon,
-  Settings as SettingsIcon,
-  ShieldCheck,
-  Users,
-  Zap
+    Bell,
+    Briefcase,
+    ChevronRight,
+    CreditCard,
+    LogOut,
+    LucideIcon,
+    Settings as SettingsIcon,
+    ShieldCheck,
+    Users,
+    Zap
 } from 'lucide-react-native';
 import React from 'react';
 import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -61,7 +60,7 @@ const Settings: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       {/* Header */}
       <View style={styles.header}>

@@ -1,33 +1,32 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-  Briefcase,
-  ChevronLeft,
-  FileText,
-  Mail,
-  MapPin,
-  PenSquare,
+    Briefcase,
+    ChevronLeft,
+    FileText,
+    Mail,
+    MapPin,
+    PenSquare,
 } from 'lucide-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InvoiceResponse } from '@/src/api/generated';
 import {
-  formatInvoiceCurrency,
-  formatInvoiceStatusLabel,
-  getInvoiceByIdApi,
-  getInvoiceStatusTone,
-  updateInvoiceStatusApi,
+    formatInvoiceCurrency,
+    formatInvoiceStatusLabel,
+    getInvoiceByIdApi,
+    getInvoiceStatusTone,
+    updateInvoiceStatusApi,
 } from '@/src/services/invoiceService';
 
 const STATUS_ACTIONS = ['Draft', 'Sent', 'Viewed', 'Partially Paid', 'Paid', 'Overdue'] as const;
@@ -146,7 +145,7 @@ const InvoiceDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>

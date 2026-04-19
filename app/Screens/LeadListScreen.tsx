@@ -14,7 +14,6 @@ import React, { useState } from 'react';
 import {
     Dimensions,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -77,7 +76,7 @@ const LeadListScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
       
       {/* Header Area */}
       <View style={styles.header}>

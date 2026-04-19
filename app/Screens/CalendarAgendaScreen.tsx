@@ -11,7 +11,6 @@ import React, { useState } from 'react';
 import {
     Dimensions,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -55,7 +54,7 @@ const CalendarAgendaScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       {/* Header Navigation */}
       <View style={styles.header}>

@@ -3,76 +3,75 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-  Calendar,
-  Camera,
-  Check,
-  CheckCircle2,
-  ChevronLeft,
-  Clock,
-  Images,
-  Mail,
-  MapPin,
-  MessageSquare,
-  MoreVertical,
-  Phone,
-  Play,
-  Plus,
-  Trash2,
-  X,
+    Calendar,
+    Camera,
+    Check,
+    CheckCircle2,
+    ChevronLeft,
+    Clock,
+    Images,
+    Mail,
+    MapPin,
+    MessageSquare,
+    MoreVertical,
+    Phone,
+    Play,
+    Plus,
+    Trash2,
+    X,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Linking,
-  Modal,
-  PanResponder,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Linking,
+    Modal,
+    PanResponder,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-  CountryLookupResponse,
-  JobChecklistItemRequest,
-  JobPhotoResponse,
-  JobResponse,
-  PostApiJobsAddPhotoJobIdBody,
-  StateProvinceLookupResponse,
-  getFieldoreAPI,
+    CountryLookupResponse,
+    JobChecklistItemRequest,
+    JobPhotoResponse,
+    JobResponse,
+    PostApiJobsAddPhotoJobIdBody,
+    StateProvinceLookupResponse,
+    getFieldoreAPI,
 } from '@/src/api/generated';
 import {
-  addJobNoteApi,
-  addJobPhotoApi,
-  deleteJobApi,
-  deleteJobNoteApi,
-  deleteJobPhotoApi,
-  editJobNoteApi,
-  getJobAddressText,
-  getJobByIdApi,
-  getJobCustomerName,
-  getJobDisplayTitle,
-  getJobInitials,
-  reorderJobChecklistApi,
-  replaceJobChecklistApi,
-  updateJobApi,
-  updateJobStatusApi,
+    addJobNoteApi,
+    addJobPhotoApi,
+    deleteJobApi,
+    deleteJobNoteApi,
+    deleteJobPhotoApi,
+    editJobNoteApi,
+    getJobAddressText,
+    getJobByIdApi,
+    getJobCustomerName,
+    getJobDisplayTitle,
+    getJobInitials,
+    reorderJobChecklistApi,
+    replaceJobChecklistApi,
+    updateJobApi,
+    updateJobStatusApi,
 } from '@/src/services/jobService';
 import {
-  DURATION_OPTIONS,
-  JOB_PRIORITY_OPTIONS,
-  JOB_STATUS_OPTIONS,
-  JOB_TYPE_OPTIONS,
-  JobPriority,
-  JobStatus,
+    DURATION_OPTIONS,
+    JOB_PRIORITY_OPTIONS,
+    JOB_STATUS_OPTIONS,
+    JOB_TYPE_OPTIONS,
+    JobPriority,
+    JobStatus,
 } from '@/src/utils/jobValidation';
 
 type TabType = 'Checklist' | 'Photos' | 'Notes';
@@ -1229,7 +1228,7 @@ const JobDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>

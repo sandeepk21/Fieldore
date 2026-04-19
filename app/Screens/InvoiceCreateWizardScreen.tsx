@@ -1,27 +1,26 @@
 import { router } from 'expo-router';
 import {
-    Calendar,
-    ChevronDown,
-    ChevronLeft,
-    LucideIcon,
-    Plus,
-    Trash2,
-    X
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  LucideIcon,
+  Plus,
+  Trash2,
+  X
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -493,7 +492,6 @@ const InvoiceCreateWizardScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       {/* Header */}
       <View style={styles.header}>

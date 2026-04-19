@@ -82,6 +82,7 @@ const SideFilterSheet: React.FC<SideFilterSheetProps> = ({
 
   return (
     <Modal visible={isMounted} transparent animationType="none" onRequestClose={onClose}>
+      
       <View style={styles.overlay}>
         <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />

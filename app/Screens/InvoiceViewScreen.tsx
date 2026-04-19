@@ -1,22 +1,21 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-    ChevronLeft,
-    Download,
-    MoreVertical,
-    Send,
-    Share2,
-    Smartphone,
-    Zap
+  ChevronLeft,
+  Download,
+  MoreVertical,
+  Send,
+  Share2,
+  Smartphone,
+  Zap
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    Alert,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -345,7 +344,6 @@ const InvoiceViewScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       {/* Header */}
       <View style={styles.header}>

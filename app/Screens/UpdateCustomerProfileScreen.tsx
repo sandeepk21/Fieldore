@@ -1,47 +1,46 @@
 import {
-  CountryLookupResponse,
-  StateProvinceLookupResponse,
-  UpdateCustomerRequest,
-  getFieldoreAPI,
+    CountryLookupResponse,
+    StateProvinceLookupResponse,
+    UpdateCustomerRequest,
+    getFieldoreAPI,
 } from '@/src/api/generated';
 import { useLoader } from '@/src/context/LoaderContext';
 import {
-  getBillingCustomerAddress,
-  getCustomerByIdApi,
-  getPrimaryCustomerAddress,
-  updateCustomerApi,
+    getBillingCustomerAddress,
+    getCustomerByIdApi,
+    getPrimaryCustomerAddress,
+    updateCustomerApi,
 } from '@/src/services/customerService';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-  Building2,
-  Check,
-  ChevronDown,
-  Dog,
-  LucideIcon,
-  Mail,
-  MapPin,
-  Phone,
-  ShieldCheck,
-  StickyNote,
-  User,
-  X,
+    Building2,
+    Check,
+    ChevronDown,
+    Dog,
+    LucideIcon,
+    Mail,
+    MapPin,
+    Phone,
+    ShieldCheck,
+    StickyNote,
+    User,
+    X,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -362,7 +361,7 @@ const SkeletonSection = ({
 
 const UpdateCustomerProfileSkeleton = () => (
   <SafeAreaView style={styles.container}>
-    <StatusBar barStyle="dark-content" />
+    
     <View style={styles.header}>
       <View style={styles.closeBtn}>
         <SkeletonBlock height={18} width={18} style={{ borderRadius: 9 }} />
@@ -864,7 +863,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>

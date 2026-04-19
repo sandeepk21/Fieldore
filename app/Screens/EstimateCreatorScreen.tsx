@@ -16,7 +16,6 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TextInput,
@@ -67,7 +66,7 @@ const EstimateCreatorScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      
       
       {/* Top Header */}
       <View style={styles.header}>
