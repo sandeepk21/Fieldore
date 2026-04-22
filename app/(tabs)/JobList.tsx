@@ -1,4 +1,3 @@
-import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import {
   Briefcase,
@@ -27,6 +26,7 @@ import { Calendar as RNCalendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { JobResponse, PostApiJobsGetAllJobsParams } from '@/src/api/generated';
+import JobsViewSwitcher from '@/src/components/JobsViewSwitcher';
 import SideFilterSheet from '@/src/components/SideFilterSheet';
 import { getJobCustomerName, getJobDisplayTitle, getJobsApi } from '@/src/services/jobService';
 
@@ -222,7 +222,6 @@ const EmptyState = ({ loading }: { loading: boolean }) => (
 
 const JobList: React.FC = () => {
   const isFetchingRef = useRef(false);
-  const hasFocusedOnceRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -316,19 +315,6 @@ const JobList: React.FC = () => {
     fetchJobs(1, 'initial');
   }, [fetchJobs]);
 
-  // Focus effect to refresh when screen comes into focus
-  useFocusEffect(
-  useCallback(() => {
-    if (!hasFocusedOnceRef.current) {
-      hasFocusedOnceRef.current = true;
-      return;
-    }
-
-    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-    fetchJobs(1, 'refresh');
-  }, [fetchJobs])
-);
-
   const handleRefresh = () => {
     fetchJobs(1, 'refresh');
   };
@@ -375,15 +361,17 @@ const JobList: React.FC = () => {
     <SafeAreaView style={styles.container}>
 
       <View style={styles.header}>
-        <View style={styles.headerTop}>
+          <View style={styles.headerTop}>
           <View>
-            <Text style={styles.titleText}>Job List</Text>
+            <Text style={styles.titleText}>Jobs</Text>
             <Text style={styles.subtitleText}>{totalRecords} {titleCountLabel}</Text>
           </View>
           <TouchableOpacity style={styles.moreBtn}>
             <MoreHorizontal size={20} color="#64748b" />
           </TouchableOpacity>
         </View>
+
+        <JobsViewSwitcher activeView="list" />
 
         <View style={styles.searchRow}>
           <View style={styles.searchWrapper}>
@@ -661,7 +649,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
-  searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16,marginTop: 10 },
   searchWrapper: {
     flex: 1,
     height: 56,

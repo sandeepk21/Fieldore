@@ -3,7 +3,6 @@ import {
   GetCustomersRequest,
   getFieldoreAPI,
 } from '@/src/api/generated';
-import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import {
   Calendar,
@@ -245,7 +244,6 @@ const EmptyState = ({ loading }: { loading: boolean }) => (
 
 const Customers: React.FC = () => {
   const isFetchingRef = useRef(false);
-  const hasFocusedOnceRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -348,17 +346,6 @@ const Customers: React.FC = () => {
     setCustomers([]);
     fetchCustomers(1, 'initial');
   }, [fetchCustomers]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!hasFocusedOnceRef.current) {
-        hasFocusedOnceRef.current = true;
-        return;
-      }
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
-      fetchCustomers(1, 'refresh');
-    }, [fetchCustomers])
-  );
 
   const handleRefresh = () => {
     fetchCustomers(1, 'refresh');

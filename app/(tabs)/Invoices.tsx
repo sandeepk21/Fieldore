@@ -1,7 +1,6 @@
-import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { FileText, Plus, Search, SlidersHorizontal } from 'lucide-react-native';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -165,11 +164,9 @@ const InvoicesScreen: React.FC = () => {
     [filters, searchQuery]
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      loadInvoices();
-    }, [loadInvoices])
-  );
+  useEffect(() => {
+    loadInvoices();
+  }, [loadInvoices]);
 
   const totalRevenue = invoices.reduce((sum, invoice) => sum + (invoice.totalAmount || 0), 0);
   const activeFilterCount = useMemo(
