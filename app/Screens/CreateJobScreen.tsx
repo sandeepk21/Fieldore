@@ -1,42 +1,43 @@
 import {
-    CountryLookupResponse,
-    StateProvinceLookupResponse,
-    getFieldoreAPI,
+  CountryLookupResponse,
+  StateProvinceLookupResponse,
+  getFieldoreAPI,
 } from '@/src/api/generated';
 import { router } from 'expo-router';
 import {
-    Briefcase,
-    Calendar,
-    Check,
-    CheckCircle2,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    Clock,
-    LucideIcon,
+  Briefcase,
+  Calendar,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  LucideIcon,
     MapPin,
     Plus,
+    Search,
     StickyNote,
     Timer,
-    Trash2,
-    User,
-    X,
+  Trash2,
+  User,
+  X,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -44,16 +45,16 @@ import { useLoader } from '@/src/context/LoaderContext';
 import { getCustomerDisplayName, getCustomersApi } from '@/src/services/customerService';
 import { createJobApi } from '@/src/services/jobService';
 import {
-    CreateJobFormData,
-    CreateJobFormErrors,
-    DURATION_OPTIONS,
-    JOB_PRIORITY_OPTIONS,
-    JOB_STATUS_OPTIONS,
-    JOB_TYPE_OPTIONS,
-    buildCreateJobPayload,
-    createInitialJobFormData,
-    validateCreateJobForm,
-    validateJobField,
+  CreateJobFormData,
+  CreateJobFormErrors,
+  DURATION_OPTIONS,
+  JOB_PRIORITY_OPTIONS,
+  JOB_STATUS_OPTIONS,
+  JOB_TYPE_OPTIONS,
+  buildCreateJobPayload,
+  createInitialJobFormData,
+  validateCreateJobForm,
+  validateJobField,
 } from '@/src/utils/jobValidation';
 
 interface SectionProps {
@@ -96,6 +97,11 @@ type CustomerOption = {
 type SelectOption = {
   label: string;
   value: string;
+};
+
+type SheetOption = SelectOption & {
+  selected: boolean;
+  onSelect: () => void;
 };
 
 type ActiveSheet =
@@ -306,20 +312,93 @@ const BottomSheet = ({
   title: string;
   children: React.ReactNode;
 }) => (
-  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.modalRoot}>
       <Pressable style={styles.modalBackdrop} onPress={onClose} />
-      <View style={styles.sheetCard}>
-        <View style={styles.sheetHandle} />
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
-            <X size={18} color="#64748b" />
+      <SafeAreaView edges={['bottom']} style={styles.sheetSafeArea}>
+        <View style={styles.sheetCard}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeader}>
+            <View>
+              <Text style={styles.sheetEyebrow}>Choose Value</Text>
+              <Text style={styles.sheetTitle}>{title}</Text>
+            </View>
+            <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
+              <X size={18} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+          {children}
+        </View>
+      </SafeAreaView>
+    </View>
+  </Modal>
+);
+
+const SelectionModal = ({
+  visible,
+  title,
+  searchPlaceholder,
+  searchValue,
+  onSearchChange,
+  onClose,
+  options,
+}: {
+  visible: boolean;
+  title: string;
+  searchPlaceholder?: string;
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  onClose: () => void;
+  options: SheetOption[];
+}) => (
+  <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <SafeAreaView style={styles.selectionModalOverlay}>
+      <View style={styles.selectionModalContent}>
+        <View style={styles.selectionModalHeader}>
+          <Text style={styles.selectionModalTitle}>{title}</Text>
+          <TouchableOpacity onPress={onClose} style={styles.selectionModalCloseBtn}>
+            <X size={20} color="#0f172a" />
           </TouchableOpacity>
         </View>
-        {children}
+
+        {searchPlaceholder ? (
+          <View style={styles.selectionSearchContainer}>
+            <Search size={18} color="#cbd5e1" style={styles.selectionSearchIcon} />
+            <TextInput
+              style={styles.selectionSearchInput}
+              placeholder={searchPlaceholder}
+              placeholderTextColor="#94a3b8"
+              value={searchValue}
+              onChangeText={onSearchChange}
+            />
+          </View>
+        ) : null}
+
+        <ScrollView style={styles.selectionModalScroll} showsVerticalScrollIndicator={false}>
+          {options.map(option => (
+            <TouchableOpacity
+              key={option.value}
+              style={styles.selectionModalItem}
+              onPress={option.onSelect}
+            >
+              <View style={styles.selectionModalItemContent}>
+                <Text style={styles.selectionModalItemTitle}>{option.label}</Text>
+                <Text style={styles.selectionModalItemSubtitle}>
+                  {option.selected ? 'Selected' : 'Tap to choose'}
+                </Text>
+              </View>
+              {option.selected ? (
+                <View style={styles.selectionModalCheckCircle}>
+                  <Check size={14} color="white" strokeWidth={4} />
+                </View>
+              ) : (
+                <ChevronRight size={18} color="#cbd5e1" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
-    </View>
+    </SafeAreaView>
   </Modal>
 );
 
@@ -340,6 +419,7 @@ const CreateJobScreen: React.FC = () => {
   const [pendingChecklistItem, setPendingChecklistItem] = useState('');
   const [countries, setCountries] = useState<CountryLookupResponse[]>([]);
   const [serviceStates, setServiceStates] = useState<StateProvinceLookupResponse[]>([]);
+  const [selectionSearch, setSelectionSearch] = useState('');
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -477,9 +557,15 @@ const CreateJobScreen: React.FC = () => {
 
   const closeAllSheets = () => {
     setActiveSheet(null);
+    setSelectionSearch('');
     setIsDateSheetVisible(false);
     setIsTimeSheetVisible(false);
   };
+
+  const closeSelectionModal = useCallback(() => {
+    setActiveSheet(null);
+    setSelectionSearch('');
+  }, []);
 
   const handleFieldChange = useCallback((field: keyof CreateJobFormData, value: string | boolean | string[]) => {
     const nextData = { ...formData, [field]: value } as CreateJobFormData;
@@ -589,7 +675,7 @@ const CreateJobScreen: React.FC = () => {
             selected: formData.customerId === option.value,
             onSelect: () => {
               handleFieldChange('customerId', option.value);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -602,7 +688,7 @@ const CreateJobScreen: React.FC = () => {
             selected: formData.jobType === option,
             onSelect: () => {
               handleFieldChange('jobType', option);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -615,7 +701,7 @@ const CreateJobScreen: React.FC = () => {
             selected: formData.priority === option,
             onSelect: () => {
               handleFieldChange('priority', option);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -628,7 +714,7 @@ const CreateJobScreen: React.FC = () => {
             selected: formData.status === option,
             onSelect: () => {
               handleFieldChange('status', option);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -641,7 +727,7 @@ const CreateJobScreen: React.FC = () => {
             selected: formData.estimatedDurationMinutes === option,
             onSelect: () => {
               handleFieldChange('estimatedDurationMinutes', option);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -658,7 +744,7 @@ const CreateJobScreen: React.FC = () => {
                 serviceStateCode: '',
               }));
               setErrors({});
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -670,14 +756,36 @@ const CreateJobScreen: React.FC = () => {
             selected: formData.serviceStateCode === option.value,
             onSelect: () => {
               handleFieldChange('serviceStateCode', option.value);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
       default:
         return null;
     }
-  }, [activeSheet, countryOptions, customers, formData, handleFieldChange, serviceStateOptions]);
+  }, [activeSheet, closeSelectionModal, countryOptions, customers, formData, handleFieldChange, serviceStateOptions]);
+
+  const selectionSearchPlaceholder = useMemo(() => {
+    switch (activeSheet) {
+      case 'customer':
+        return 'Search customer...';
+      case 'serviceCountry':
+        return 'Search country...';
+      case 'serviceState':
+        return 'Search state...';
+      default:
+        return '';
+    }
+  }, [activeSheet]);
+
+  const filteredSheetOptions = useMemo(() => {
+    const options = sheetConfig?.options || [];
+    const query = selectionSearch.trim().toLowerCase();
+
+    if (!query) return options;
+
+    return options.filter(option => option.label.toLowerCase().includes(query));
+  }, [selectionSearch, sheetConfig]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -974,20 +1082,15 @@ const CreateJobScreen: React.FC = () => {
         </View>
       </KeyboardAvoidingView>
 
-      <BottomSheet
+      <SelectionModal
         visible={Boolean(activeSheet && sheetConfig)}
-        onClose={() => setActiveSheet(null)}
+        onClose={closeSelectionModal}
         title={sheetConfig?.title || 'Select'}
-      >
-        <ScrollView style={styles.sheetOptions} showsVerticalScrollIndicator={false}>
-          {(sheetConfig?.options || []).map(option => (
-            <TouchableOpacity key={option.value} style={styles.sheetOptionRow} onPress={option.onSelect}>
-              <Text style={styles.sheetOptionText}>{option.label}</Text>
-              {option.selected ? <Check size={18} color="#2563eb" strokeWidth={3} /> : null}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </BottomSheet>
+        searchPlaceholder={selectionSearchPlaceholder || undefined}
+        searchValue={selectionSearch}
+        onSearchChange={setSelectionSearch}
+        options={filteredSheetOptions}
+      />
 
       <BottomSheet
         visible={isDateSheetVisible}
@@ -1040,6 +1143,13 @@ const CreateJobScreen: React.FC = () => {
         onClose={() => setIsTimeSheetVisible(false)}
         title="Choose Start Time"
       >
+        <View style={styles.timePreviewCard}>
+          <Text style={styles.timePreviewLabel}>Selected Time</Text>
+          <Text style={styles.timePreviewValue}>
+            {timeParts.hour12}:{toTwoDigits(timeParts.minute)} {timeParts.meridiem}
+          </Text>
+        </View>
+
         <View style={styles.timeSheetContent}>
           <View style={styles.timeSelectorColumn}>
             <Text style={styles.timeSelectorLabel}>Hour</Text>
@@ -1090,9 +1200,15 @@ const CreateJobScreen: React.FC = () => {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.confirmPickerBtn} onPress={handleConfirmTime}>
-          <Text style={styles.confirmPickerBtnText}>Set Time</Text>
-        </TouchableOpacity>
+        <View style={styles.timeActionRow}>
+          <TouchableOpacity style={styles.timeCancelBtn} onPress={() => setIsTimeSheetVisible(false)}>
+            <Text style={styles.timeCancelBtnText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.confirmPickerBtn} onPress={handleConfirmTime}>
+            <Text style={styles.confirmPickerBtnText}>Set Time</Text>
+          </TouchableOpacity>
+        </View>
       </BottomSheet>
     </SafeAreaView>
   );
@@ -1249,34 +1365,134 @@ const styles = StyleSheet.create({
   },
   createBtnDisabled: { opacity: 0.55 },
   createBtnText: { color: 'white', fontSize: 16, fontWeight: '900' },
-  modalRoot: {
+  selectionModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.26)',
-    justifyContent: 'flex-end',
+    backgroundColor: '#FFFFFF',
   },
-  modalBackdrop: { flex: 1 },
-  sheetCard: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    paddingTop: 10,
-    maxHeight: '82%',
+  selectionModalContent: {
+    flex: 1,
+    padding: 24,
   },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 48,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#cbd5e1',
-    marginBottom: 14,
+  selectionModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  sheetHeader: {
+  selectionModalTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  selectionModalCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectionSearchContainer: {
+    position: 'relative',
+    marginBottom: 24,
+    justifyContent: 'center',
+  },
+  selectionSearchIcon: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+  },
+  selectionSearchInput: {
+    width: '100%',
+    height: 56,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    paddingLeft: 48,
+    paddingRight: 16,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  selectionModalScroll: { flex: 1 },
+  selectionModalItem: {
+    width: '100%',
+    padding: 20,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+  },
+  selectionModalItemContent: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  selectionModalItemTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  selectionModalItemSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  selectionModalCheckCircle: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.36)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: { flex: 1 },
+  sheetSafeArea: {
+    justifyContent: 'flex-end',
+  },
+  sheetCard: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    paddingHorizontal: 22,
+    paddingBottom: Platform.OS === 'ios' ? 18 : 20,
+    paddingTop: 10,
+    maxHeight: '78%',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 18,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 52,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#cbd5e1',
+    marginBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  sheetEyebrow: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
   },
   sheetTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
   sheetCloseBtn: {
@@ -1287,18 +1503,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sheetOptions: { maxHeight: 360 },
-  sheetOptionRow: {
-    minHeight: 54,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    marginBottom: 10,
-  },
-  sheetOptionText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0f172a', paddingRight: 8 },
+  sheetOptions: { maxHeight: 380 },
   calendarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1341,6 +1546,30 @@ const styles = StyleSheet.create({
   },
   calendarCellText: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
   calendarCellTextSelected: { color: 'white' },
+  timePreviewCard: {
+    borderRadius: 24,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    marginBottom: 18,
+    alignItems: 'center',
+  },
+  timePreviewLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  timePreviewValue: {
+    marginTop: 6,
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.8,
+  },
   timeSheetContent: { flexDirection: 'row', gap: 16 },
   timeSelectorColumn: { flex: 1 },
   timeSelectorLabel: { fontSize: 13, fontWeight: '800', color: '#64748b', marginBottom: 10 },
@@ -1373,7 +1602,27 @@ const styles = StyleSheet.create({
   meridiemChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   meridiemChipText: { fontSize: 14, fontWeight: '900', color: '#475569' },
   meridiemChipTextActive: { color: 'white' },
+  timeActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  timeCancelBtn: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 18,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#475569',
+  },
   confirmPickerBtn: {
+    flex: 1,
     minHeight: 52,
     borderRadius: 18,
     backgroundColor: '#2563eb',
