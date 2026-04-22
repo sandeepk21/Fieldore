@@ -8,7 +8,7 @@ import {
   View
 } from 'react-native';
 // 1. Import useRouter from expo-router
-import { clearAuthData, getUser } from '@/src/utils/storage';
+import { getUser } from '@/src/utils/storage';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../hooks/useAuth';
 
@@ -82,7 +82,7 @@ const SplashScreen = () => {
             easing: Easing.inOut(Easing.exp),
             useNativeDriver: true,
           }).start(async () => {
-            clearAuthData();
+            //clearAuthData();
             // 5. Trigger Navigation to your onboarding route
             // Replace '/onboarding' with your actual file path in (tabs) or app folder
             console.log('🔹 Navigation Triggered. Authenticated:', isAuthenticated);

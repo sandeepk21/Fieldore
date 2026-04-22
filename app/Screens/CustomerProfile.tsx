@@ -1,27 +1,39 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-    ChevronLeft,
-    Mail,
-    MapPin,
-    MoreVertical,
-    Phone,
-    Plus,
-    StickyNote,
+  Briefcase,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Mail,
+  MapPin,
+  MoreVertical,
+  Phone,
+  Plus,
+  ReceiptText,
+  StickyNote,
 } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CustomerResponse } from '@/src/api/generated';
 import {
-    formatCustomerAddress,
-    getBillingCustomerAddress,
-    getCustomerByIdApi,
-    getCustomerDisplayName,
-    getCustomerInitials,
-    getPrimaryCustomerAddress,
+  CustomerEstimateSummaryResponse,
+  CustomerInvoiceSummaryResponse,
+  CustomerJobSummaryResponse,
+  CustomerNoteResponse,
+  CustomerResponse,
+} from '@/src/api/generated';
+import {
+  formatCustomerAddress,
+  getBillingCustomerAddress,
+  getCustomerByIdApi,
+  getCustomerDisplayName,
+  getCustomerInitials,
+  getPrimaryCustomerAddress,
 } from '@/src/services/customerService';
+import { formatInvoiceCurrency, formatInvoiceStatusLabel, getInvoiceStatusTone } from '@/src/services/invoiceService';
 
 type TabType = 'Jobs' | 'Invoices' | 'Estimates' | 'Notes';
 
@@ -47,12 +59,336 @@ const openEditScreen = (customerId: string) => {
   });
 };
 
+const openJobScreen = (jobId?: string) => {
+  if (!jobId) {
+    return;
+  }
+
+  router.push({
+    pathname: '../Screens/JobDetailScreen',
+    params: { jobId },
+  });
+};
+
+const openInvoiceScreen = (invoiceId?: string) => {
+  if (!invoiceId) {
+    return;
+  }
+
+  router.push({
+    pathname: '../Screens/InvoiceDetailScreen',
+    params: { invoiceId },
+  });
+};
+
+const formatDate = (value?: string | null, fallback = 'Not available') => {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(date);
+};
+
+const formatDateTime = (value?: string | null, fallback = 'Not available') => {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+};
+
+const toHeadline = (value?: string | null, fallback = 'Not set') => {
+  if (!value?.trim()) return fallback;
+  return value
+    .trim()
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const getJobStatusTone = (status?: string | null) => {
+  const normalized = (status || '').trim().toLowerCase();
+
+  if (normalized.includes('complete') || normalized === 'done') {
+    return { bg: '#ecfdf5', text: '#059669', border: '#d1fae5' };
+  }
+
+  if (normalized.includes('cancel')) {
+    return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
+  }
+
+  if (normalized.includes('progress') || normalized.includes('active')) {
+    return { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' };
+  }
+
+  return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
+};
+
+const getEstimateStatusTone = (status?: string | null) => {
+  const normalized = (status || '').trim().toLowerCase();
+
+  if (normalized.includes('approve') || normalized.includes('accept')) {
+    return { bg: '#ecfdf5', text: '#059669', border: '#d1fae5' };
+  }
+
+  if (normalized.includes('reject') || normalized.includes('declin')) {
+    return { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' };
+  }
+
+  if (normalized.includes('sent') || normalized.includes('view')) {
+    return { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' };
+  }
+
+  return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+};
+
 const EmptyTabCard = ({ title, subtitle }: { title: string; subtitle: string }) => (
   <View style={styles.emptyCard}>
     <Text style={styles.emptyCardTitle}>{title}</Text>
     <Text style={styles.emptyCardText}>{subtitle}</Text>
   </View>
 );
+
+const StatusBadge = ({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: { bg: string; text: string; border: string };
+}) => (
+  <View style={[styles.statusBadge, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+    <Text style={[styles.statusBadgeText, { color: tone.text }]}>{label.toUpperCase()}</Text>
+  </View>
+);
+
+const JobsTab = ({ jobs }: { jobs: CustomerJobSummaryResponse[] }) => {
+  if (!jobs.length) {
+    return (
+      <EmptyTabCard
+        title="No jobs yet"
+        subtitle="Jobs linked to this customer will show up here as soon as they’re created."
+      />
+    );
+  }
+
+  return (
+    <View style={styles.listGap}>
+      {jobs.map(job => {
+        const status = toHeadline(job.status, 'Scheduled');
+        const schedule = job.scheduledStartAt
+          ? `${formatDate(job.scheduledStartAt)}${job.scheduledEndAt ? ` - ${formatDate(job.scheduledEndAt)}` : ''}`
+          : 'Schedule pending';
+
+        return (
+          <TouchableOpacity
+            key={job.id || job.jobNumber || schedule}
+            style={styles.recordCard}
+            activeOpacity={0.9}
+            onPress={() => openJobScreen(job.id)}
+            disabled={!job.id}
+          >
+            <View style={styles.recordHeader}>
+              <View style={styles.recordHeaderLeft}>
+                <View style={styles.recordIconBox}>
+                  <Briefcase size={20} color="#2563eb" />
+                </View>
+                <View style={styles.recordTextWrap}>
+                  <Text style={styles.recordTitle}>{job.title?.trim() || job.jobNumber?.trim() || 'Untitled Job'}</Text>
+                  <Text style={styles.recordSubtitle}>
+                    {job.jobNumber?.trim() || 'Job number pending'}
+                    {job.jobType?.trim() ? ` • ${toHeadline(job.jobType)}` : ''}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={18} color="#cbd5e1" />
+            </View>
+
+            <View style={styles.recordMetaRow}>
+              <View style={styles.inlineMeta}>
+                <CalendarDays size={14} color="#94a3b8" />
+                <Text style={styles.recordMetaText}>{schedule}</Text>
+              </View>
+              <StatusBadge label={status} tone={getJobStatusTone(job.status)} />
+            </View>
+
+            <View style={styles.recordFooter}>
+              <Text style={styles.recordFooterText}>Priority: {toHeadline(job.priority, 'Normal')}</Text>
+              <Text style={styles.recordFooterText}>Updated {formatDate(job.updatedAt || job.createdAt)}</Text>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+const InvoicesTab = ({ invoices }: { invoices: CustomerInvoiceSummaryResponse[] }) => {
+  if (!invoices.length) {
+    return (
+      <EmptyTabCard
+        title="No invoices yet"
+        subtitle="Invoices for this customer will appear here once they’re created."
+      />
+    );
+  }
+
+  return (
+    <View style={styles.listGap}>
+      {invoices.map(invoice => {
+        const status = formatInvoiceStatusLabel(invoice.status);
+        const total = formatInvoiceCurrency(invoice.totalAmount);
+        const balance = formatInvoiceCurrency(invoice.balanceDueAmount ?? invoice.totalAmount);
+
+        return (
+          <TouchableOpacity
+            key={invoice.id || invoice.invoiceNumber || status}
+            style={styles.recordCard}
+            activeOpacity={0.9}
+            onPress={() => openInvoiceScreen(invoice.id)}
+            disabled={!invoice.id}
+          >
+            <View style={styles.recordHeader}>
+              <View style={styles.recordHeaderLeft}>
+                <View style={styles.recordIconBox}>
+                  <ReceiptText size={20} color="#2563eb" />
+                </View>
+                <View style={styles.recordTextWrap}>
+                  <Text style={styles.recordTitle}>{invoice.invoiceNumber?.trim() || invoice.id || 'Invoice'}</Text>
+                  <Text style={styles.recordSubtitle}>
+                    Issued {formatDate(invoice.issuedOn)}
+                    {invoice.dueOn ? ` • Due ${formatDate(invoice.dueOn)}` : ''}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight size={18} color="#cbd5e1" />
+            </View>
+
+            <View style={styles.recordMetaRow}>
+              <View style={styles.amountBlock}>
+                <Text style={styles.amountLabel}>Total</Text>
+                <Text style={styles.amountValue}>{total}</Text>
+              </View>
+              <StatusBadge label={status} tone={getInvoiceStatusTone(invoice.status)} />
+            </View>
+
+            <View style={styles.recordFooter}>
+              <Text style={styles.recordFooterText}>Balance due: {balance}</Text>
+              <Text style={styles.recordFooterText}>
+                {invoice.jobId ? `Linked job: ${invoice.jobId}` : 'Standalone invoice'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
+const EstimatesTab = ({ estimates }: { estimates: CustomerEstimateSummaryResponse[] }) => {
+  if (!estimates.length) {
+    return (
+      <EmptyTabCard
+        title="No estimates yet"
+        subtitle="Estimates linked to this customer will show here when they’re available."
+      />
+    );
+  }
+
+  return (
+    <View style={styles.listGap}>
+      {estimates.map(estimate => {
+        const status = toHeadline(estimate.status, 'Draft');
+
+        return (
+          <View key={estimate.id || estimate.estimateNumber || status} style={styles.recordCard}>
+            <View style={styles.recordHeader}>
+              <View style={styles.recordHeaderLeft}>
+                <View style={styles.recordIconBox}>
+                  <FileText size={20} color="#2563eb" />
+                </View>
+                <View style={styles.recordTextWrap}>
+                  <Text style={styles.recordTitle}>{estimate.estimateNumber?.trim() || estimate.id || 'Estimate'}</Text>
+                  <Text style={styles.recordSubtitle}>
+                    Issued {formatDate(estimate.issuedOn)}
+                    {estimate.expiresOn ? ` • Expires ${formatDate(estimate.expiresOn)}` : ''}
+                  </Text>
+                </View>
+              </View>
+              <StatusBadge label={status} tone={getEstimateStatusTone(estimate.status)} />
+            </View>
+
+            <View style={styles.recordFooter}>
+              <Text style={styles.recordFooterText}>Total: {formatInvoiceCurrency(estimate.totalAmount)}</Text>
+              <Text style={styles.recordFooterText}>Updated {formatDate(estimate.updatedAt || estimate.createdAt)}</Text>
+            </View>
+
+            {!!estimate.notes?.trim() && <Text style={styles.recordNotes}>{estimate.notes.trim()}</Text>}
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+const NotesTab = ({
+  notes,
+  internalNotes,
+  billingAddressText,
+  customerId,
+}: {
+  notes: CustomerNoteResponse[];
+  internalNotes: string;
+  billingAddressText: string;
+  customerId: string;
+}) => {
+  if (!notes.length && !internalNotes.trim()) {
+    return (
+      <EmptyTabCard
+        title="No notes yet"
+        subtitle="Customer notes and internal updates will show here once they’re added."
+      />
+    );
+  }
+
+  return (
+    <View style={styles.listGap}>
+      {!!internalNotes.trim() && (
+        <View style={styles.noteCard}>
+          <View style={styles.noteIconGhost}>
+            <StickyNote size={40} color="#0f172a" opacity={0.05} />
+          </View>
+          <Text style={styles.noteLabel}>Internal note</Text>
+          <Text style={styles.noteText}>{internalNotes}</Text>
+          <View style={styles.noteFooter}>
+            <Text style={styles.noteDate}>{billingAddressText}</Text>
+            <TouchableOpacity onPress={() => openEditScreen(customerId)}>
+              <Text style={styles.editBtn}>Edit Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {notes.map(note => (
+        <View key={note.id || `${note.createdAt}-${note.createdByUserId}`} style={styles.noteCard}>
+          <View style={styles.noteHeader}>
+            <Text style={styles.noteAuthor}>{note.createdByDisplayName?.trim() || 'Team update'}</Text>
+            <Text style={styles.noteTimestamp}>{formatDateTime(note.createdAt)}</Text>
+          </View>
+          <Text style={styles.noteText}>{note.body?.trim() || 'No note content available.'}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
 
 const SkeletonBlock = ({
   height,
@@ -150,7 +486,11 @@ const CustomerProfile: React.FC = () => {
     ? 'Same as service address'
     : formatCustomerAddress(billingAddress);
   const phoneNumber = customer?.mobilePhone?.trim() || customer?.alternatePhone?.trim() || '';
-  const notes = customer?.internalNotes?.trim() || 'No internal notes added yet.';
+  const internalNotes = customer?.internalNotes?.trim() || '';
+  const jobs = customer?.jobs || [];
+  const invoices = customer?.invoices || [];
+  const estimates = customer?.estimates || [];
+  const notes = customer?.notes || [];
   const tabs: TabType[] = ['Jobs', 'Invoices', 'Estimates', 'Notes'];
 
   const handleCall = async () => {
@@ -255,45 +595,24 @@ const CustomerProfile: React.FC = () => {
 
           <View style={styles.contentArea}>
             {activeTab === 'Jobs' && (
-              <View style={styles.listGap}>
-                <EmptyTabCard
-                  title="No jobs yet"
-                  subtitle="This customer profile is connected and ready. Job history can be shown here when that data is available."
-                />
-              </View>
+              <JobsTab jobs={jobs} />
             )}
 
             {activeTab === 'Invoices' && (
-              <View style={styles.listGap}>
-                <EmptyTabCard
-                  title="No invoices yet"
-                  subtitle="Invoice history for this customer can be added here once the invoice detail API is connected."
-                />
-              </View>
+              <InvoicesTab invoices={invoices} />
             )}
 
             {activeTab === 'Estimates' && (
-              <View style={styles.listGap}>
-                <EmptyTabCard
-                  title="No estimates yet"
-                  subtitle="Estimate records are not wired on this page yet, but the section is ready for integration."
-                />
-              </View>
+              <EstimatesTab estimates={estimates} />
             )}
 
             {activeTab === 'Notes' && (
-              <View style={styles.noteCard}>
-                <View style={styles.noteIconGhost}>
-                  <StickyNote size={40} color="#0f172a" opacity={0.05} />
-                </View>
-                <Text style={styles.noteText}>{notes}</Text>
-                <View style={styles.noteFooter}>
-                  <Text style={styles.noteDate}>{billingAddressText}</Text>
-                  <TouchableOpacity onPress={() => openEditScreen(customerId)}>
-                    <Text style={styles.editBtn}>Edit Profile</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <NotesTab
+                notes={notes}
+                internalNotes={internalNotes}
+                billingAddressText={billingAddressText}
+                customerId={customerId}
+              />
             )}
           </View>
         </ScrollView>
@@ -420,37 +739,43 @@ const styles = StyleSheet.create({
   },
   contentArea: { padding: 24 },
   listGap: { gap: 16 },
-  card: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
+  recordCard: {
     backgroundColor: 'white',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#f1f5f9',
+    padding: 18,
+    gap: 14,
   },
-  cardLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  cardIconBox: {
+  recordHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  recordHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  recordIconBox: {
     width: 48,
     height: 48,
-    backgroundColor: '#f8fafc',
     borderRadius: 16,
+    backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  cardSubText: { fontSize: 11, fontWeight: '700', color: '#94a3b8' },
-  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  badgeBlue: { backgroundColor: '#eff6ff' },
-  badgeGreen: { backgroundColor: '#ecfdf5' },
-  badgeText: { fontSize: 9, fontWeight: '900' },
-  badgeTextBlue: { color: '#2563eb' },
-  badgeTextGreen: { color: '#10b981' },
-  cardRight: { alignItems: 'flex-end' },
-  cardPrice: { fontSize: 14, fontWeight: '900', color: '#0f172a' },
-  statusMini: { fontSize: 9, fontWeight: '900', marginTop: 4 },
+  recordTextWrap: { flex: 1, gap: 4 },
+  recordTitle: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
+  recordSubtitle: { fontSize: 12, fontWeight: '600', color: '#64748b', lineHeight: 18 },
+  recordMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  inlineMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  recordMetaText: { fontSize: 12, fontWeight: '700', color: '#64748b' },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
+  amountBlock: { gap: 2 },
+  amountLabel: { fontSize: 11, fontWeight: '700', color: '#94a3b8' },
+  amountValue: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  recordFooter: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  recordFooterText: { flex: 1, fontSize: 11, fontWeight: '700', color: '#94a3b8' },
+  recordNotes: { fontSize: 13, fontWeight: '500', color: '#475569', lineHeight: 20 },
   emptyCard: {
     backgroundColor: '#f8fafc',
     borderRadius: 24,
@@ -467,6 +792,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
+  noteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 },
+  noteLabel: { fontSize: 11, fontWeight: '900', color: '#2563eb', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 10 },
+  noteAuthor: { flex: 1, fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  noteTimestamp: { fontSize: 11, fontWeight: '700', color: '#94a3b8' },
   noteIconGhost: { position: 'absolute', top: 10, right: 10 },
   noteText: { fontSize: 14, fontWeight: '500', color: '#475569', lineHeight: 22 },
   noteFooter: {

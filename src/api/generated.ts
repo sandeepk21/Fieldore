@@ -235,6 +235,70 @@ export interface CustomerAddressResponse {
   country?: string | null;
 }
 
+export interface CustomerEstimateSummaryResponse {
+  id?: string;
+  /** @nullable */
+  estimateNumber?: string | null;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  /** @nullable */
+  expiresOn?: string | null;
+  totalAmount?: number;
+  /** @nullable */
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CustomerInvoiceSummaryResponse {
+  id?: string;
+  /** @nullable */
+  jobId?: string | null;
+  /** @nullable */
+  invoiceNumber?: string | null;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  dueOn?: string;
+  totalAmount?: number;
+  balanceDueAmount?: number;
+  /** @nullable */
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CustomerJobSummaryResponse {
+  id?: string;
+  /** @nullable */
+  jobNumber?: string | null;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  jobType?: string | null;
+  /** @nullable */
+  priority?: string | null;
+  /** @nullable */
+  status?: string | null;
+  scheduledStartAt?: string;
+  /** @nullable */
+  scheduledEndAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CustomerNoteResponse {
+  id?: string;
+  /** @nullable */
+  createdByUserId?: string | null;
+  /** @nullable */
+  body?: string | null;
+  createdAt?: string;
+  /** @nullable */
+  createdByDisplayName?: string | null;
+}
+
 export interface CustomerResponse {
   id?: string;
   businessId?: string;
@@ -264,6 +328,14 @@ export interface CustomerResponse {
   isActive?: boolean;
   /** @nullable */
   addresses?: CustomerAddressResponse[] | null;
+  /** @nullable */
+  notes?: CustomerNoteResponse[] | null;
+  /** @nullable */
+  jobs?: CustomerJobSummaryResponse[] | null;
+  /** @nullable */
+  invoices?: CustomerInvoiceSummaryResponse[] | null;
+  /** @nullable */
+  estimates?: CustomerEstimateSummaryResponse[] | null;
   createdAt?: string;
   updatedAt?: string;
 }

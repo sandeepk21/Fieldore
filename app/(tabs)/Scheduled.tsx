@@ -1,20 +1,20 @@
 import {
-    ChevronLeft,
-    ChevronRight,
-    Clock,
-    MoreVertical,
-    Plus,
-    User,
-    Zap
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  MoreVertical,
+  Plus,
+  User,
+  Zap
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    Dimensions,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -35,7 +35,7 @@ interface JobEvents {
   [key: number]: Job[];
 }
 
-const CalendarAgendaScreen: React.FC = () => {
+const Scheduled: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<number>(11);
 
   const daysInMonth = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -446,4 +446,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CalendarAgendaScreen;
+export default Scheduled;

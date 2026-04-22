@@ -14,9 +14,7 @@ import {
 import React from 'react';
 import {
   Dimensions,
-
   Platform,
-
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +22,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { demoInvoices, demoJobs } from '@/src/demo/mockFieldData';
 
 const { width } = Dimensions.get('window');
 
@@ -41,6 +40,7 @@ interface ScheduleItem {
   client: string;
   type: string;
   status: 'In Progress' | 'Upcoming';
+  distance: string;
 }
 
 // --- Components ---
@@ -61,19 +61,24 @@ const StatCard: React.FC<{ item: StatItem }> = ({ item }) => {
 };
 
 const Dashboard: React.FC = () => {
+  const monthlyRevenue = demoInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
   const stats: StatItem[] = [
-    { label: "Today's Jobs", value: "8", icon: Calendar, color: "#2563eb", bg: "#eff6ff" },
-    { label: "Pending Invoices", value: "12", icon: FileText, color: "#f59e0b", bg: "#fffbeb" },
-    { label: "Revenue (MTD)", value: "$12.4k", icon: TrendingUp, color: "#10b981", bg: "#ecfdf5" },
-    { label: "New Leads", value: "5", icon: Users, color: "#6366f1", bg: "#eef2ff" },
+    { label: "Today's Jobs", value: `${demoJobs.filter(job => job.date === '2026-03-11').length}`, icon: Calendar, color: "#2563eb", bg: "#eff6ff" },
+    { label: "Pending Invoices", value: `${demoInvoices.filter(invoice => invoice.status !== 'Paid').length}`, icon: FileText, color: "#f59e0b", bg: "#fffbeb" },
+    { label: "Revenue (MTD)", value: `$${(monthlyRevenue / 1000).toFixed(1)}k`, icon: TrendingUp, color: "#10b981", bg: "#ecfdf5" },
+    { label: "New Leads", value: "2", icon: Users, color: "#6366f1", bg: "#eef2ff" },
   ];
 
-  const schedule: ScheduleItem[] = [
-    { time: "09:00 AM", client: "Sarah Johnson", type: "Pipe Repair", status: "In Progress" },
-    { time: "11:30 AM", client: "Mike Torres", type: "Full Rewiring", status: "Upcoming" },
-    { time: "02:00 PM", client: "Emma Davis", type: "Garden Lighting", status: "Upcoming" },
-    { time: "04:30 PM", client: "Alex Chen", type: "Annual Inspection", status: "Upcoming" },
-  ];
+  const schedule: ScheduleItem[] = demoJobs
+    .filter(job => job.date === '2026-03-11')
+    .slice(0, 4)
+    .map(job => ({
+      time: job.time,
+      client: job.customerName,
+      type: job.serviceType,
+      status: job.status === 'In Progress' ? 'In Progress' : 'Upcoming',
+      distance: `${job.distanceMiles.toFixed(1)} mi`,
+    }));
 
   return (
     <SafeAreaView style={styles.container}>
@@ -104,7 +109,7 @@ const Dashboard: React.FC = () => {
 
         {/* Schedule Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Today's Schedule</Text>
+          <Text style={styles.sectionTitle}>Today&apos;s Schedule</Text>
           <TouchableOpacity>
             <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
@@ -136,7 +141,7 @@ const Dashboard: React.FC = () => {
                   </View>
                   <View style={styles.metaItem}>
                     <MapPin size={10} color="#94a3b8" />
-                    <Text style={styles.metaText}>2.4 mi</Text>
+                    <Text style={styles.metaText}>{job.distance}</Text>
                   </View>
                 </View>
               </View>

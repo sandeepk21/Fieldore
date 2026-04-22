@@ -29,6 +29,7 @@ export default function TabLayout() {
                     if (route.name === "Dashboard") IconComponent = LayoutDashboard;
                     else if (route.name === "Customers") IconComponent = Users;
                     else if (route.name === "JobList") IconComponent = Calendar;
+                    else if (route.name === "Scheduled") IconComponent = Calendar;
                     else if (route.name === "Invoices") IconComponent = FileText;
                     else if (route.name === "InvoicesListScreen") IconComponent = FileText;
                     else if (route.name === "Settings") IconComponent = Settings;
@@ -49,10 +50,12 @@ export default function TabLayout() {
         >
             <Tabs.Screen name="Dashboard" options={{ title: "Dashboard" }} />
             <Tabs.Screen name="Customers" options={{ title: "Customers" }} />
+            <Tabs.Screen name="Scheduled" options={{ title: "Scheduled" }} />
             <Tabs.Screen name="JobList" options={{ title: "JobList" }} />
             <Tabs.Screen name="Invoices" options={{ title: "Invoices" }} />
             <Tabs.Screen name="InvoicesListScreen" options={{ title: "InvoicesListScreen" }} />
             <Tabs.Screen name="Settings" options={{ title: "Settings" }} />
+            
         </Tabs>
 </>
     );

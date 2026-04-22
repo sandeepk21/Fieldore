@@ -9,7 +9,6 @@ import {
 } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import {
-  Dimensions,
   Modal,
   ScrollView,
   StyleSheet,
@@ -20,17 +19,37 @@ import {
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const { width } = Dimensions.get('window');
+import { demoInvoices } from '@/src/demo/mockFieldData';
 
 interface Invoice {
   id: number;
   number: string;
   customer: string;
-  amount: string;
+  amount: number;
   date: string;
   status: 'Paid' | 'Unpaid' | 'Overdue';
 }
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+const formatDisplayDate = (value: string) => {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(date);
+};
+
+const invoices: Invoice[] = demoInvoices;
 
 const InvoiceListScreen: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('All');
@@ -40,14 +59,6 @@ const InvoiceListScreen: React.FC = () => {
   const [isCalendarVisible, setIsCalendarVisible] = useState(false);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
-
-  const invoices: Invoice[] = [
-    { id: 1, number: "INV-2042", customer: "Sarah Johnson", amount: "$1,280.00", date: "Mar 10, 2026", status: "Paid" },
-    { id: 2, number: "INV-2045", customer: "Mike Torres", amount: "$450.00", date: "Mar 08, 2026", status: "Unpaid" },
-    { id: 3, number: "INV-2038", customer: "Emma Davis", amount: "$890.00", date: "Feb 24, 2026", status: "Overdue" },
-    { id: 4, number: "INV-2048", customer: "Alex Chen", amount: "$2,100.00", date: "Mar 01, 2026", status: "Unpaid" },
-    { id: 5, number: "INV-2030", customer: "Jessica White", amount: "$320.00", date: "Jan 15, 2026", status: "Paid" }
-  ];
 
   // Calendar Range Logic
   const onDayPress = (day: any) => {
@@ -87,7 +98,7 @@ const InvoiceListScreen: React.FC = () => {
       const searchMatch = inv.customer.toLowerCase().includes(searchQuery.toLowerCase());
       let dateMatch = true;
       if (startDate && endDate) {
-        const invDate = parse(inv.date, 'MMM dd, yyyy', new Date());
+        const invDate = parse(formatDisplayDate(inv.date), 'MMM dd, yyyy', new Date());
         dateMatch = isWithinInterval(invDate, {
           start: startOfDay(new Date(startDate)),
           end: startOfDay(new Date(endDate))
@@ -140,9 +151,9 @@ const InvoiceListScreen: React.FC = () => {
               <View style={styles.iconBox}><FileText size={20} color="#609df9" /></View>
               <View style={{flex:1, marginLeft: 12}}>
                 <Text style={styles.custName}>{inv.customer}</Text>
-                <Text style={styles.invNum}>{inv.number} • {inv.date}</Text>
+                <Text style={styles.invNum}>{inv.number} • {formatDisplayDate(inv.date)}</Text>
               </View>
-              <Text style={styles.amount}>{inv.amount}</Text>
+              <Text style={styles.amount}>{formatCurrency(inv.amount)}</Text>
             </View>
           </View>
         ))}
