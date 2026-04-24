@@ -441,10 +441,10 @@ const InvoicesScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  header: { paddingHorizontal: 15, paddingTop: 16, paddingBottom: 8 },
   title: { fontSize: 28, fontWeight: '900', color: '#0f172a' },
   subtitle: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '600' },
-  searchRow: { paddingHorizontal: 20, paddingTop: 8, flexDirection: 'row', gap: 12 },
+  searchRow: { paddingHorizontal: 15, paddingTop: 8, flexDirection: 'row', gap: 12 },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   list: { flex: 1 },
-  listContent: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 120 },
+  listContent: { paddingHorizontal: 15, paddingTop: 18, paddingBottom: 120 },
   card: {
     backgroundColor: '#fff',
     borderRadius: 24,
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
   },
   cardTitleWrap: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', },
   cardSubtitle: { marginTop: 4, fontSize: 12, color: '#64748b', fontWeight: '600' },
   statusBadge: {
     borderRadius: 999,
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    paddingHorizontal: 24,
+    paddingHorizontal: 15,
     paddingVertical: 36,
   },
   emptyTitle: { marginTop: 14, fontSize: 20, fontWeight: '800', color: '#0f172a' },

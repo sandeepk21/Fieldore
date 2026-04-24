@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
   },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   cardTitleInfo: { flex: 1, gap: 10 },
-  jobTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a', lineHeight: 22 },
+  jobTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', lineHeight: 20, textTransform: 'capitalize' },
   customerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   customerName: { fontSize: 13, color: '#64748b', fontWeight: '600' },
   statusBadge: {

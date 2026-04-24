@@ -6,8 +6,7 @@ import {
   Clock,
   MoreVertical,
   Plus,
-  User,
-  Zap,
+  Zap
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -434,10 +433,10 @@ const Scheduled: React.FC = () => {
             </View>
             <Text style={styles.jobTitle}>{item.title}</Text>
             <View style={styles.clientRow}>
-              <User size={12} color="#cbd5e1" />
+             <Zap size={10} color="#f59e0b" fill="#f59e0b" />
               <Text style={styles.clientName}>{item.client}</Text>
             </View>
-            <Text style={styles.jobTimeRange}>{item.time}</Text>
+            
           </View>
 
           <View style={styles.arrowBox}>
@@ -445,6 +444,7 @@ const Scheduled: React.FC = () => {
           </View>
         </TouchableOpacity>
       </View>
+      
     ),
     [handleOpenJob]
   );
@@ -785,14 +785,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     gap: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 15,
     paddingTop: 32,
   },
   agendaList: {
     flex: 1,
   },
   agendaContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 15,
     backgroundColor: '#f8fafc',
   },
   agendaListContent: {
@@ -884,8 +884,8 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   clientName: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '500',
     color: '#94a3b8',
   },
   jobTimeRange: {
