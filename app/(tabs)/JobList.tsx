@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import {
   Briefcase,
-  Calendar,
   ChevronRight,
   Clock,
   MoreHorizontal,
@@ -45,6 +44,7 @@ type JobCardModel = {
   timeLabel: string;
   status: string;
   typeLabel: string;
+  dateParts: { day: string; month: string };
 };
 
 const PAGE_SIZE = 10;
@@ -136,15 +136,26 @@ const formatJobTimeRange = (start?: string | null, end?: string | null) => {
   return `${startLabel} - ${endLabel}`;
 };
 
-const mapJobToCard = (job: JobResponse): JobCardModel => ({
-  id: job.id || job.jobNumber || Math.random().toString(),
-  title: getJobDisplayTitle(job),
-  customer: getJobCustomerName(job),
-  dateLabel: formatJobDate(job.scheduledStartAt),
-  timeLabel: formatJobTimeRange(job.scheduledStartAt, job.scheduledEndAt),
-  status: job.status?.trim() || 'Scheduled',
-  typeLabel: job.jobType?.trim() || 'General',
-});
+const mapJobToCard = (job: JobResponse): JobCardModel => {
+  const start = job.scheduledStartAt ? new Date(job.scheduledStartAt) : null;
+  let day = '--';
+  let month = 'TBD';
+  if (start && !Number.isNaN(start.getTime())) {
+    day = new Intl.DateTimeFormat('en-US', { day: '2-digit' }).format(start);
+    month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(start).toUpperCase();
+  }
+
+  return {
+    id: job.id || job.jobNumber || Math.random().toString(),
+    title: getJobDisplayTitle(job),
+    customer: getJobCustomerName(job),
+    dateLabel: formatJobDate(job.scheduledStartAt),
+    timeLabel: formatJobTimeRange(job.scheduledStartAt, job.scheduledEndAt),
+    status: job.status?.trim() || 'Scheduled',
+    typeLabel: job.jobType?.trim() || 'General',
+    dateParts: { day, month },
+  };
+};
 
 const getStatusStyles = (status: string) => {
   switch (status.toLowerCase()) {
@@ -174,26 +185,21 @@ const SkeletonBlock = ({
 
 const JobCardSkeleton = () => (
   <View style={styles.jobCard}>
-    <View style={styles.cardTop}>
-      <View style={styles.cardTitleInfo}>
-        <SkeletonBlock height={20} width="68%" />
-        <View style={styles.customerRow}>
-          <SkeletonBlock height={12} width="40%" />
+    <View style={styles.cardHeader}>
+      <SkeletonBlock height={56} width={56} style={{ borderRadius: 14 }} />
+      <View style={styles.cardMain}>
+        <View style={styles.titleRow}>
+          <SkeletonBlock height={20} width="60%" />
+          <SkeletonBlock height={24} width={70} style={{ borderRadius: 8 }} />
         </View>
+        <SkeletonBlock height={16} width="45%" style={{ marginTop: 4 }} />
+        <SkeletonBlock height={16} width="35%" style={{ marginTop: 4 }} />
       </View>
-      <SkeletonBlock height={24} width={92} style={styles.skeletonBadge} />
     </View>
     <View style={styles.cardDivider} />
-    <View style={styles.cardBottom}>
-      <View style={styles.metaInfoRow}>
-        <View style={styles.metaItem}>
-          <SkeletonBlock height={12} width={64} />
-        </View>
-        <View style={styles.metaItem}>
-          <SkeletonBlock height={12} width={92} />
-        </View>
-      </View>
-      <SkeletonBlock height={18} width={18} style={{ borderRadius: 9 }} />
+    <View style={styles.cardFooter}>
+      <SkeletonBlock height={28} width={80} style={{ borderRadius: 8 }} />
+      <SkeletonBlock height={16} width={16} style={{ borderRadius: 8 }} />
     </View>
   </View>
 );
@@ -211,10 +217,10 @@ const EmptyState = ({ loading }: { loading: boolean }) => (
     {!loading ? (
       <>
         <View style={styles.emptyIconBox}>
-          <Briefcase size={32} color="#cbd5e1" />
+          <Briefcase size={40} color="#2563eb" strokeWidth={1.5} />
         </View>
         <Text style={styles.emptyTitle}>No jobs found</Text>
-        <Text style={styles.emptySubtitle}>Try a different search or change the filters.</Text>
+        <Text style={styles.emptySubtitle}>We couldn't find any jobs matching your criteria. Try adjusting the filters or search term.</Text>
       </>
     ) : null}
   </View>
@@ -361,7 +367,7 @@ const JobList: React.FC = () => {
     <SafeAreaView style={styles.container}>
 
       <View style={styles.header}>
-          <View style={styles.headerTop}>
+        <View style={styles.headerTop}>
           <View>
             <Text style={styles.titleText}>Jobs</Text>
             <Text style={styles.subtitleText}>{totalRecords} {titleCountLabel}</Text>
@@ -443,7 +449,7 @@ const JobList: React.FC = () => {
             return (
               <TouchableOpacity
                 style={[styles.jobCard]}
-                activeOpacity={0.9}
+                activeOpacity={0.7}
                 onPress={() => {
                   router.push({
                     pathname: '../Screens/JobDetailScreen',
@@ -451,43 +457,40 @@ const JobList: React.FC = () => {
                   });
                 }}
               >
-                <View style={styles.cardTop}>
-                  <View style={styles.cardTitleInfo}>
-                    <Text style={styles.jobTitle}>{item.title}</Text>
-                    <View style={styles.customerRow}>
-                      <User size={12} color="#cbd5e1" />
-                      <Text style={styles.customerName}>{item.customer}</Text>
-                    </View>
+                <View style={styles.cardHeader}>
+                  <View style={styles.dateBlock}>
+                    <Text style={styles.dateMonth}>{item.dateParts.month}</Text>
+                    <Text style={styles.dateDay}>{item.dateParts.day}</Text>
                   </View>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: statusStyle.bg, borderColor: statusStyle.border },
-                    ]}
-                  >
-                    <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                      {item.status.toUpperCase()}
-                    </Text>
+
+                  <View style={styles.cardMain}>
+                    <View style={styles.titleRow}>
+                      <Text style={styles.jobTitle} numberOfLines={1}>{item.title}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
+                        <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.customerRow}>
+                      <User size={14} color="#64748b" />
+                      <Text style={styles.customerName} numberOfLines={1}>{item.customer}</Text>
+                    </View>
+
+                    <View style={styles.timeRow}>
+                      <Clock size={14} color="#64748b" />
+                      <Text style={styles.timeText}>{item.timeLabel}</Text>
+                    </View>
                   </View>
                 </View>
 
                 <View style={styles.cardDivider} />
 
-                <View style={styles.cardBottom}>
-                  <View style={styles.metaInfoRow}>
-                    <View style={styles.metaItem}>
-                      <Calendar size={13} color="#cbd5e1" />
-                      <Text style={styles.metaText}>{item.dateLabel}</Text>
-                    </View>
-                    <View style={styles.metaItem}>
-                      <Clock size={13} color="#cbd5e1" />
-                      <Text style={styles.metaText}>{item.timeLabel}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.typeRow}>
+                <View style={styles.cardFooter}>
+                  <View style={styles.typeBadge}>
+                    <Briefcase size={12} color="#64748b" />
                     <Text style={styles.typeText}>{item.typeLabel}</Text>
-                    <ChevronRight size={16} color="#cbd5e1" />
                   </View>
+                  <ChevronRight size={18} color="#cbd5e1" />
                 </View>
               </TouchableOpacity>
             );
@@ -623,55 +626,44 @@ const JobList: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { paddingHorizontal: 15, paddingTop: 5, paddingBottom: 15, backgroundColor: '#F8FAFC' },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  titleText: { fontSize: 28, fontWeight: '900', color: '#0f172a', letterSpacing: -1 },
-  subtitleText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#94a3b8',
-    letterSpacing: 1.5,
-    marginTop: 4,
-  },
+  container: { flex: 1, backgroundColor: '#ffffff' },
+  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#ffffff' },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
+  titleText: { fontSize: 32, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 },
+  subtitleText: { marginTop: 4, fontSize: 14, color: '#64748b', fontWeight: '600' },
   moreBtn: {
     width: 44,
     height: 44,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  searchRow: { flexDirection: 'row', gap: 12, marginBottom: 16,marginTop: 10 },
-  searchWrapper: {
-    flex: 1,
-    height: 56,
-    backgroundColor: 'white',
-    borderRadius: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  searchIcon: { marginRight: 12 },
-  searchInput: { flex: 1, height: '100%', fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  filterButton: {
-    width: 56,
-    height: 56,
-    backgroundColor: 'white',
+    backgroundColor: '#f8fafc',
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+  },
+  searchRow: { flexDirection: 'row', gap: 10, marginBottom: 16, marginTop: 12 },
+  searchWrapper: {
+    flex: 1,
+    height: 52,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  searchIcon: { marginRight: 12 },
+  searchInput: { flex: 1, height: '100%', fontSize: 15, color: '#0f172a', fontWeight: '500' },
+  filterButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterButtonActive: {
     backgroundColor: '#2563eb',
@@ -679,81 +671,120 @@ const styles = StyleSheet.create({
   },
   filterBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#0f172a',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#ef4444',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   filterBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
   filterChipsContainer: { paddingRight: 24, gap: 10 },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'white',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
   },
   chipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  chipText: { fontSize: 12, fontWeight: '800', color: '#64748b' },
-  chipTextActive: { color: 'white' },
+  chipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  chipTextActive: { color: '#ffffff' },
   errorBox: {
     marginTop: 16,
     borderRadius: 18,
     backgroundColor: '#fef2f2',
     borderWidth: 1,
     borderColor: '#fecaca',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  errorText: { fontSize: 12, color: '#b91c1c', fontWeight: '700' },
-  scrollContent: { paddingHorizontal: 15, paddingBottom: 120, gap: 16, flexGrow: 1 },
+  errorText: { fontSize: 13, color: '#b91c1c', fontWeight: '700' },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 120, gap: 16, flexGrow: 1, paddingTop: 10 },
+
   jobCard: {
-    backgroundColor: 'white',
-    borderRadius: 28,
-    padding: 18,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+    padding: 16,
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3,
   },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  cardTitleInfo: { flex: 1, gap: 10 },
-  jobTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', lineHeight: 20, textTransform: 'capitalize' },
-  customerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  customerName: { fontSize: 13, color: '#64748b', fontWeight: '600' },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    borderRadius: 10,
+  cardHeader: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
+  dateBlock: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  cardDivider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 16 },
-  cardBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  metaInfoRow: { flex: 1, gap: 10 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metaText: { fontSize: 12, color: '#64748b', fontWeight: '600' },
-  typeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  typeText: { fontSize: 12, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' },
-  emptyState: { paddingHorizontal: 24, paddingTop: 80, alignItems: 'center' },
-  emptyIconBox: {
-    width: 88,
-    height: 88,
-    borderRadius: 28,
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 8 },
-  emptySubtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', lineHeight: 20 },
+  dateMonth: { fontSize: 11, fontWeight: '800', color: '#2563eb', textTransform: 'uppercase' },
+  dateDay: { fontSize: 20, fontWeight: '900', color: '#0f172a', marginTop: -2 },
+
+  cardMain: { flex: 1, gap: 6 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  jobTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: '#0f172a', lineHeight: 22 },
+  statusBadge: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statusText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  customerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  customerName: { fontSize: 14, fontWeight: '600', color: '#475569', flex: 1 },
+
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  timeText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+
+  cardDivider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 14 },
+
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  typeText: { fontSize: 12, fontWeight: '700', color: '#475569', textTransform: 'uppercase' },
+
+  emptyState: { paddingHorizontal: 24, paddingTop: 60, alignItems: 'center' },
+  emptyIconBox: {
+    width: 100,
+    height: 100,
+    borderRadius: 30,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+  },
+  emptyTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a', marginBottom: 10, textAlign: 'center' },
+  emptySubtitle: { fontSize: 15, color: '#64748b', textAlign: 'center', lineHeight: 22, fontWeight: '500' },
   skeletonBlock: { backgroundColor: '#e2e8f0', borderRadius: 999 },
   skeletonBadge: { borderRadius: 999 },
   footerLoader: { paddingVertical: 8 },
@@ -761,20 +792,19 @@ const styles = StyleSheet.create({
   endText: { textAlign: 'center', color: '#94a3b8', fontSize: 12, fontWeight: '700', paddingBottom: 12 },
   fab: {
     position: 'absolute',
-    bottom: 100,
     right: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 20,
+    bottom: 100,
+    width: 64,
     height: 64,
     borderRadius: 22,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#2563eb',
     shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
   // Filter sheet styles
   filterContent: { paddingBottom: 24 },

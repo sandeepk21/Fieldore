@@ -109,7 +109,7 @@ const mapCustomerToCard = (customer: CustomerResponse): CustomerCardModel => {
 const CustomerCard: React.FC<{ customer: CustomerCardModel }> = ({ customer }) => (
   <TouchableOpacity
     style={styles.card}
-    activeOpacity={0.9}
+    activeOpacity={0.7}
     onPress={() => {
       router.push({
         pathname: '../Screens/CustomerProfile',
@@ -123,7 +123,7 @@ const CustomerCard: React.FC<{ customer: CustomerCardModel }> = ({ customer }) =
       </View>
       <View style={styles.headerInfo}>
         <View style={styles.nameRow}>
-          <Text style={styles.customerName}>{customer.name}</Text>
+          <Text style={styles.customerName} numberOfLines={1}>{customer.name}</Text>
           <View
             style={[
               styles.statusBadge,
@@ -141,7 +141,7 @@ const CustomerCard: React.FC<{ customer: CustomerCardModel }> = ({ customer }) =
           </View>
         </View>
         <View style={styles.phoneRow}>
-          <Phone size={12} color="#94a3b8" />
+          <Phone size={14} color="#64748b" />
           <Text style={styles.phoneText}>{customer.phone}</Text>
         </View>
       </View>
@@ -153,7 +153,7 @@ const CustomerCard: React.FC<{ customer: CustomerCardModel }> = ({ customer }) =
     <View style={styles.metadataGrid}>
       <View style={styles.metaItem}>
         <View style={styles.metaIconBox}>
-          <Calendar size={14} color="#94a3b8" />
+          <Calendar size={16} color="#64748b" />
         </View>
         <View>
           <Text style={styles.metaLabel}>CREATED</Text>
@@ -162,11 +162,11 @@ const CustomerCard: React.FC<{ customer: CustomerCardModel }> = ({ customer }) =
       </View>
       <View style={styles.metaItem}>
         <View style={styles.metaIconBox}>
-          <MapPin size={14} color="#94a3b8" />
+          <MapPin size={16} color="#64748b" />
         </View>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.metaLabel}>LOCATION</Text>
-          <Text style={styles.metaValue}>{customer.location}</Text>
+          <Text style={styles.metaValue} numberOfLines={1}>{customer.location}</Text>
         </View>
       </View>
     </View>
@@ -186,14 +186,14 @@ const SkeletonBlock = ({
 const CustomerCardSkeleton = () => (
   <View style={styles.card}>
     <View style={styles.cardHeader}>
-      <View style={styles.skeletonAvatar} />
+      <SkeletonBlock height={56} width={56} style={{ borderRadius: 20 }} />
       <View style={styles.headerInfo}>
         <View style={styles.nameRow}>
-          <SkeletonBlock height={18} width="55%" />
-          <SkeletonBlock height={18} width={60} style={styles.skeletonBadge} />
+          <SkeletonBlock height={20} width="60%" />
+          <SkeletonBlock height={22} width={50} style={styles.skeletonBadge} />
         </View>
         <View style={styles.phoneRow}>
-          <SkeletonBlock height={12} width="45%" />
+          <SkeletonBlock height={14} width="40%" />
         </View>
       </View>
     </View>
@@ -202,21 +202,17 @@ const CustomerCardSkeleton = () => (
 
     <View style={styles.metadataGrid}>
       <View style={styles.metaItem}>
-        <View style={styles.metaIconBox}>
-          <SkeletonBlock height={14} width={14} />
-        </View>
+        <SkeletonBlock height={36} width={36} style={{ borderRadius: 12 }} />
         <View style={styles.skeletonMetaText}>
-          <SkeletonBlock height={8} width={52} style={{ marginBottom: 6 }} />
-          <SkeletonBlock height={12} width={82} />
+          <SkeletonBlock height={10} width={52} style={{ marginBottom: 6 }} />
+          <SkeletonBlock height={14} width={82} />
         </View>
       </View>
       <View style={styles.metaItem}>
-        <View style={styles.metaIconBox}>
-          <SkeletonBlock height={14} width={14} />
-        </View>
+        <SkeletonBlock height={36} width={36} style={{ borderRadius: 12 }} />
         <View style={styles.skeletonMetaText}>
-          <SkeletonBlock height={8} width={58} style={{ marginBottom: 6 }} />
-          <SkeletonBlock height={12} width={96} />
+          <SkeletonBlock height={10} width={58} style={{ marginBottom: 6 }} />
+          <SkeletonBlock height={14} width={96} />
         </View>
       </View>
     </View>
@@ -235,8 +231,11 @@ const EmptyState = ({ loading }: { loading: boolean }) => (
   <View style={styles.emptyState}>
     {!loading ? (
       <>
+        <View style={styles.emptyIconBox}>
+          <UserPlus size={40} color="#2563eb" strokeWidth={1.5} />
+        </View>
         <Text style={styles.emptyTitle}>No customers found</Text>
-        <Text style={styles.emptyText}>Try a different search or adjust the filters.</Text>
+        <Text style={styles.emptyText}>We couldn't find any clients matching your criteria. Try adjusting the filters or add a new one.</Text>
       </>
     ) : null}
   </View>
@@ -405,7 +404,11 @@ const Customers: React.FC = () => {
             onPress={() => setShowFilters(true)}
           >
             <SlidersHorizontal size={20} color={activeFilterCount > 0 ? '#2563eb' : '#64748b'} />
-            {activeFilterCount > 0 && <View style={styles.filterDot} />}
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -517,147 +520,168 @@ const Customers: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { paddingHorizontal: 15, paddingTop: 15, paddingBottom: 16 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  titleText: { fontSize: 28, fontWeight: '900', color: '#0f172a', letterSpacing: -1 },
-  countText: { fontSize: 11, fontWeight: '800', color: '#94a3b8', letterSpacing: 1, marginTop: 4 },
+  container: { flex: 1, backgroundColor: '#ffffff' },
+  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#ffffff' },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
+  titleText: { fontSize: 32, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 },
+  countText: { fontSize: 14, fontWeight: '600', color: '#64748b', marginTop: 4 },
   moreBtn: {
     width: 44,
     height: 44,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  searchRow: { flexDirection: 'row', gap: 12 },
-  searchWrapper: {
-    flex: 1,
-    height: 56,
-    backgroundColor: 'white',
-    borderRadius: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  searchIcon: { marginRight: 12 },
-  searchInput: { flex: 1, height: '100%', fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  filterBtn: {
-    width: 56,
-    height: 56,
-    backgroundColor: 'white',
+    backgroundColor: '#f8fafc',
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+  },
+  searchRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  searchWrapper: {
+    flex: 1,
+    height: 52,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  searchIcon: { marginRight: 12 },
+  searchInput: { flex: 1, height: '100%', fontSize: 15, fontWeight: '500', color: '#0f172a' },
+  filterBtn: {
+    width: 52,
+    height: 52,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     position: 'relative',
   },
-  filterBtnActive: { borderColor: '#bfdbfe', backgroundColor: '#eff6ff' },
-  filterDot: {
+  filterBtnActive: { borderColor: '#2563eb', backgroundColor: '#eff6ff' },
+  filterBadge: {
     position: 'absolute',
-    top: 14,
-    right: 14,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2563eb',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
+  filterBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
   errorBox: {
-    marginTop: 12,
-    backgroundColor: '#fff5f5',
+    marginTop: 16,
+    backgroundColor: '#fef2f2',
     borderWidth: 1,
     borderColor: '#fecaca',
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  errorText: { color: '#b91c1c', fontSize: 12, fontWeight: '700' },
-  scrollContent: { paddingHorizontal: 15, paddingBottom: 160, gap: 16, flexGrow: 1 },
+  errorText: { color: '#b91c1c', fontSize: 13, fontWeight: '700' },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 160, gap: 16, flexGrow: 1, paddingTop: 10 },
   skeletonBlock: {
     backgroundColor: '#e2e8f0',
     borderRadius: 12,
   },
   card: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 28,
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
+    borderColor: '#e2e8f0',
+    elevation: 3,
+    shadowColor: '#64748b',
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   skeletonAvatar: { width: 56, height: 56, borderRadius: 20, backgroundColor: '#e2e8f0' },
   avatar: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 18, fontWeight: '900', color: 'white' },
+  avatarText: { fontSize: 20, fontWeight: '900', color: 'white', letterSpacing: 0.5 },
   headerInfo: { flex: 1 },
-  nameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  skeletonBadge: { borderRadius: 999 },
-  customerName: { flex: 1, fontSize: 16, fontWeight: '800', color: '#0f172a' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  badgeActive: { backgroundColor: '#ecfdf5' },
-  badgeIdle: { backgroundColor: '#f8fafc' },
-  statusText: { fontSize: 9, fontWeight: '900' },
-  textActive: { color: '#10b981' },
-  textIdle: { color: '#94a3b8' },
-  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
-  phoneText: { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
-  divider: { height: 1, backgroundColor: '#f8fafc', marginVertical: 16 },
-  metadataGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  nameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
+  skeletonBadge: { borderRadius: 8 },
+  customerName: { flex: 1, fontSize: 17, fontWeight: '800', color: '#0f172a', lineHeight: 22 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  badgeActive: { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' },
+  badgeIdle: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' },
+  statusText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  textActive: { color: '#059669' },
+  textIdle: { color: '#64748b' },
+  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  phoneText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
+  divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 16 },
+  metadataGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   skeletonMetaText: { flex: 1 },
   metaIconBox: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     backgroundColor: '#f8fafc',
-    borderRadius: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metaLabel: { fontSize: 9, fontWeight: '900', color: '#cbd5e1', marginBottom: 2 },
-  metaValue: { fontSize: 11, fontWeight: '700', color: '#64748b' },
+  metaLabel: { fontSize: 10, fontWeight: '800', color: '#94a3b8', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  metaValue: { fontSize: 13, fontWeight: '700', color: '#475569' },
   emptyState: {
     flex: 1,
     minHeight: 280,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingTop: 40,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
-  emptyText: { fontSize: 13, fontWeight: '600', color: '#94a3b8', textAlign: 'center', marginTop: 8 },
+  emptyIconBox: {
+    width: 100,
+    height: 100,
+    borderRadius: 30,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+  },
+  emptyTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a', marginBottom: 10, textAlign: 'center' },
+  emptyText: { fontSize: 15, fontWeight: '500', color: '#64748b', textAlign: 'center', lineHeight: 22 },
   footerLoader: { paddingVertical: 18 },
   footerSkeleton: { borderRadius: 999, alignSelf: 'center' },
   endText: { textAlign: 'center', fontSize: 12, fontWeight: '700', color: '#94a3b8', paddingVertical: 18 },
   fab: {
     position: 'absolute',
-    bottom: 100,
     right: 24,
+    bottom: 100,
+    width: 64,
     height: 64,
-    paddingHorizontal: 24,
-    backgroundColor: '#2563eb',
     borderRadius: 22,
-    flexDirection: 'row',
+    backgroundColor: '#2563eb',
     alignItems: 'center',
-    gap: 12,
-    elevation: 8,
+    justifyContent: 'center',
     shadowColor: '#2563eb',
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
-  fabText: { color: 'white', fontSize: 14, fontWeight: '900' },
   // Filter sheet content styles
-  filterContent: {
-    paddingBottom: 24,
-  },
-  filterSection: {
-    marginBottom: 22,
-  },
+  filterContent: { paddingBottom: 24 },
+  filterSection: { marginBottom: 22 },
   filterLabel: {
     fontSize: 12,
     color: '#94a3b8',
@@ -666,52 +690,31 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginBottom: 10,
   },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  chipActive: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#bfdbfe',
-  },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#64748b',
-  },
-  chipTextActive: {
-    color: '#2563eb',
-  },
+  chipActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+  chipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  chipTextActive: { color: '#2563eb' },
   filterInputWrapper: {
-    minHeight: 56,
+    height: 56,
     backgroundColor: '#f8fafc',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  filterInputIcon: {
-    marginLeft: 2,
-  },
-  filterInput: {
-    flex: 1,
-    minHeight: 56,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
+  filterInputIcon: { marginLeft: 2 },
+  filterInput: { flex: 1, height: '100%', fontSize: 15, fontWeight: '500', color: '#0f172a' },
 });
 
 export default Customers;

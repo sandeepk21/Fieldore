@@ -1,32 +1,32 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
-    Briefcase,
-    ChevronLeft,
-    FileText,
-    Mail,
-    MapPin,
-    PenSquare,
+  Briefcase,
+  ChevronLeft,
+  Eye,
+  Mail,
+  MapPin,
+  PenSquare
 } from 'lucide-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { InvoiceResponse } from '@/src/api/generated';
 import {
-    formatInvoiceCurrency,
-    formatInvoiceStatusLabel,
-    getInvoiceByIdApi,
-    getInvoiceStatusTone,
-    updateInvoiceStatusApi,
+  formatInvoiceCurrency,
+  formatInvoiceStatusLabel,
+  getInvoiceByIdApi,
+  getInvoiceStatusTone,
+  updateInvoiceStatusApi,
 } from '@/src/services/invoiceService';
 
 const STATUS_ACTIONS = ['Draft', 'Sent', 'Viewed', 'Partially Paid', 'Paid', 'Overdue'] as const;
@@ -145,38 +145,65 @@ const InvoiceDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      
+
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
           <ChevronLeft size={20} color="#475569" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Invoice Details</Text>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() =>
-            router.push({
-              pathname: '../Screens/CreateInvoiceScreen',
-              params: { invoiceId },
-            })
-          }
-        >
-          <PenSquare size={20} color="#2563eb" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() =>
+              router.push({
+                pathname: '../Screens/InvoiceViewScreen',
+                params: { invoiceId },
+              })
+            }
+          >
+            <Eye size={20} color="#64748b" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() =>
+              router.push({
+                pathname: '../Screens/CreateInvoiceScreen',
+                params: { invoiceId },
+              })
+            }
+          >
+            <PenSquare size={20} color="#2563eb" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <View style={[styles.statusBadge, { backgroundColor: statusTone.bg, borderColor: statusTone.border }]}>
-            <Text style={[styles.statusText, { color: statusTone.text }]}>{currentStatus.toUpperCase()}</Text>
+        <View style={styles.topSection}>
+          <View style={styles.topHeaderRow}>
+            <Text style={styles.invoiceNumberLg}>{getInvoiceNumber(invoice)}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusTone.bg, borderColor: statusTone.border }]}>
+              <Text style={[styles.statusText, { color: statusTone.text }]}>{currentStatus.toUpperCase()}</Text>
+            </View>
           </View>
-          <Text style={styles.invoiceNumber}>{getInvoiceNumber(invoice)}</Text>
-          <Text style={styles.totalAmount}>{formatInvoiceCurrency(totalAmount)}</Text>
-          <Text style={styles.balanceLabel}>Balance due {formatInvoiceCurrency(balanceDueAmount)}</Text>
+
+          <View style={styles.amountCard}>
+            <View style={styles.amountBlock}>
+              <Text style={styles.amountLabel}>Total Amount</Text>
+              <Text style={styles.amountValue}>{formatInvoiceCurrency(totalAmount)}</Text>
+            </View>
+            <View style={styles.amountDivider} />
+            <View style={styles.amountBlock}>
+              <Text style={styles.amountLabel}>Balance Due</Text>
+              <Text style={[styles.amountValue, { color: '#2563eb' }]}>{formatInvoiceCurrency(balanceDueAmount)}</Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Status Actions</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Status Actions</Text>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusRow}>
             {STATUS_ACTIONS.map(status => {
               const active = status === currentStatus;
@@ -200,84 +227,149 @@ const InvoiceDetailScreen: React.FC = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Customer</Text>
-          <View style={styles.infoCard}>
-            <View style={styles.infoHeader}>
-              <View style={[styles.iconBox, { backgroundColor: '#eff6ff' }]}>
-                <FileText size={18} color="#2563eb" />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Customer</Text>
+          </View>
+          <View style={styles.partyBlock}>
+            <View style={styles.customerHeader}>
+              <View style={styles.customerAvatar}>
+                <Text style={styles.customerAvatarText}>{getCustomerName(invoice).charAt(0).toUpperCase()}</Text>
               </View>
-              <View style={styles.infoHeaderCopy}>
-                <Text style={styles.infoTitle}>{getCustomerName(invoice)}</Text>
-                <Text style={styles.infoSubtext}>{invoice.customer?.mobilePhone?.trim() || 'No phone added'}</Text>
+              <View style={styles.customerHeaderInfo}>
+                <Text style={styles.customerName}>{getCustomerName(invoice)}</Text>
+                <Text style={styles.customerPhone}>{invoice.customer?.mobilePhone?.trim() || 'No phone added'}</Text>
               </View>
             </View>
-            <View style={styles.infoRow}>
-              <Mail size={15} color="#94a3b8" />
-              <Text style={styles.infoBody}>{invoice.customer?.email?.trim() || invoice.customerEmailSnapshot?.trim() || 'No email added'}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <MapPin size={15} color="#94a3b8" />
-              <Text style={styles.infoBody}>{formatAddress(invoice)}</Text>
+
+            <View style={styles.customerDivider} />
+
+            <View style={styles.customerContactList}>
+              <View style={styles.customerContactRow}>
+                <Mail size={16} color="#64748b" />
+                <Text style={styles.customerContactText}>{invoice.customer?.email?.trim() || invoice.customerEmailSnapshot?.trim() || 'No email added'}</Text>
+              </View>
+              <View style={styles.customerContactRow}>
+                <MapPin size={16} color="#64748b" />
+                <Text style={styles.customerContactText}>{formatAddress(invoice)}</Text>
+              </View>
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Invoice Details</Text>
-          <View style={styles.infoCard}>
-            <DetailRow label="Issued On" value={formatDisplayDate(invoice.issuedOn)} />
-            <DetailRow label="Due On" value={formatDisplayDate(invoice.dueOn)} />
-            <DetailRow label="Net Terms" value={invoice.netTerms?.trim() || 'Not set'} />
-            <DetailRow label="PO Number" value={invoice.purchaseOrderNumber?.trim() || 'Not set'} />
-            <DetailRow label="Job Id" value={invoice.jobId || 'No linked job'} />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Invoice Details</Text>
+          </View>
+          <View style={styles.detailsGrid}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Issued On</Text>
+              <Text style={styles.detailValue}>{formatDisplayDate(invoice.issuedOn)}</Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Due On</Text>
+              <Text style={styles.detailValue}>{formatDisplayDate(invoice.dueOn)}</Text>
+            </View>
+          </View>
+          <View style={[styles.detailsGrid, { marginTop: 12 }]}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Net Terms</Text>
+              <Text style={styles.detailValue}>{invoice.netTerms?.trim() || 'Not set'}</Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>PO Number</Text>
+              <Text style={styles.detailValue}>{invoice.purchaseOrderNumber?.trim() || 'Not set'}</Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Line Items</Text>
-          <View style={styles.infoCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Line Items</Text>
+          </View>
+          <View style={styles.itemsContainer}>
+            <View style={styles.itemsHeader}>
+              <Text style={styles.itemsHeaderLabel}>Description</Text>
+              <Text style={styles.itemsHeaderValue}>Amount</Text>
+            </View>
             {invoice.lineItems?.length ? (
-              invoice.lineItems.map(item => (
-                <View key={item.id || `${item.name}-${item.sortOrder}`} style={styles.lineItemRow}>
-                  <View style={styles.lineItemLeft}>
-                    <Text style={styles.lineItemName}>{item.name?.trim() || 'Untitled item'}</Text>
-                    <Text style={styles.lineItemMeta}>
-                      {item.quantity || 0} x {formatInvoiceCurrency(item.unitRate)}
-                    </Text>
-                    {item.description?.trim() ? <Text style={styles.lineItemDescription}>{item.description}</Text> : null}
+              invoice.lineItems.map((item, idx) => {
+                const isLast = idx === invoice.lineItems!.length - 1;
+                return (
+                  <View key={item.id || `${item.name}-${item.sortOrder}`} style={[styles.lineItemRow, isLast && { borderBottomWidth: 0 }]}>
+                    <View style={styles.lineItemLeft}>
+                      <Text style={styles.lineItemName}>{item.name?.trim() || 'Untitled item'}</Text>
+                      <Text style={styles.lineItemMeta}>
+                        {item.quantity || 0} x {formatInvoiceCurrency(item.unitRate)}
+                      </Text>
+                      {item.description?.trim() ? <Text style={styles.lineItemDescription}>{item.description}</Text> : null}
+                    </View>
+                    <Text style={styles.lineItemTotal}>{formatInvoiceCurrency(item.lineTotal)}</Text>
                   </View>
-                  <Text style={styles.lineItemTotal}>{formatInvoiceCurrency(item.lineTotal)}</Text>
-                </View>
-              ))
+                );
+              })
             ) : (
-              <Text style={styles.infoBody}>No line items found.</Text>
+              <View style={styles.lineItemRow}>
+                <Text style={styles.infoBody}>No line items found.</Text>
+              </View>
             )}
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Totals</Text>
-          <View style={styles.infoCard}>
-            <DetailRow label="Subtotal" value={formatInvoiceCurrency(subtotal)} />
-            <DetailRow label={`Tax (${invoice.taxRate || 0}%)`} value={formatInvoiceCurrency(taxAmount)} />
-            <DetailRow label="Discount" value={formatInvoiceCurrency(invoice.discountAmount)} />
-            <View style={styles.divider} />
-            <DetailRow label="Total" value={formatInvoiceCurrency(totalAmount)} strong />
-            <DetailRow label="Balance Due" value={formatInvoiceCurrency(balanceDueAmount)} strong />
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Summary</Text>
+          </View>
+          <View style={styles.totalsContainer}>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Subtotal</Text>
+              <Text style={styles.totalValue}>{formatInvoiceCurrency(subtotal)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Tax ({invoice.taxRate || 0}%)</Text>
+              <Text style={styles.totalValue}>{formatInvoiceCurrency(taxAmount)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Discount</Text>
+              <Text style={styles.totalValue}>{formatInvoiceCurrency(invoice.discountAmount)}</Text>
+            </View>
+            <View style={styles.totalRowHighlight}>
+              <Text style={styles.totalLabelBold}>Total</Text>
+              <Text style={styles.totalValueBold}>{formatInvoiceCurrency(totalAmount)}</Text>
+            </View>
+            <View style={styles.balanceRow}>
+              <Text style={styles.balanceLabelBold}>Balance Due</Text>
+              <Text style={styles.balanceValueBold}>{formatInvoiceCurrency(balanceDueAmount)}</Text>
+            </View>
           </View>
         </View>
 
         {(invoice.notes?.trim() || invoice.jobId) && (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Notes & Reference</Text>
-            <View style={styles.infoCard}>
-              {invoice.jobId ? (
-                <View style={styles.infoRow}>
-                  <Briefcase size={15} color="#94a3b8" />
-                  <Text style={styles.infoBody}>Linked job: {invoice.jobId}</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Notes & Reference</Text>
+            </View>
+            <View style={styles.partyBlock}>
+              {invoice.notes?.trim() ? (
+                <View style={{ marginBottom: invoice.jobId ? 16 : 0 }}>
+                  <Text style={styles.notesText}>{invoice.notes}</Text>
                 </View>
               ) : null}
-              {invoice.notes?.trim() ? <Text style={styles.notesText}>{invoice.notes}</Text> : null}
+
+              {invoice.jobId ? (
+                <TouchableOpacity
+                  style={styles.linkedJobBtn}
+                  onPress={() => router.push({ pathname: '../Screens/JobDetailScreen', params: { jobId: invoice.jobId } })}
+                >
+                  <View style={styles.linkedJobIcon}>
+                    <Briefcase size={20} color="#2563eb" />
+                  </View>
+                  <View style={styles.linkedJobInfo}>
+                    <Text style={styles.linkedJobTitle}>Linked Job</Text>
+                    <Text style={styles.linkedJobId}>#{invoice.jobId}</Text>
+                  </View>
+                  <ChevronLeft size={20} color="#94a3b8" style={{ transform: [{ rotate: '180deg' }] }} />
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         )}
@@ -286,71 +378,61 @@ const InvoiceDetailScreen: React.FC = () => {
   );
 };
 
-const DetailRow = ({
-  label,
-  value,
-  strong = false,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-}) => (
-  <View style={styles.detailRow}>
-    <Text style={[styles.detailLabel, strong && styles.detailLabelStrong]}>{label}</Text>
-    <Text style={[styles.detailValue, strong && styles.detailValueStrong]}>{value}</Text>
-  </View>
-);
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { flex: 1, backgroundColor: '#ffffff' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#f1f5f9',
   },
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
   scrollView: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 40 },
-  heroCard: {
-    backgroundColor: '#fff',
-    borderRadius: 28,
+  scrollContent: { padding: 16, paddingBottom: 60 },
+  topSection: { marginBottom: 24, gap: 16 },
+  topHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  invoiceNumberLg: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
+  amountCard: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 24,
-    alignItems: 'center',
+    padding: 20,
   },
+  amountBlock: { flex: 1 },
+  amountDivider: { width: 1, backgroundColor: '#e2e8f0', marginHorizontal: 16 },
+  amountLabel: { fontSize: 12, fontWeight: '700', color: '#64748b', marginBottom: 6, textTransform: 'uppercase' },
+  amountValue: { fontSize: 24, fontWeight: '800', color: '#0f172a' },
+
   statusBadge: {
     borderWidth: 1,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  statusText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
-  invoiceNumber: { marginTop: 14, fontSize: 14, fontWeight: '800', color: '#64748b' },
-  totalAmount: { marginTop: 8, fontSize: 34, fontWeight: '900', color: '#0f172a' },
-  balanceLabel: { marginTop: 8, fontSize: 14, fontWeight: '700', color: '#475569' },
-  section: { marginTop: 18 },
-  sectionLabel: { fontSize: 14, fontWeight: '900', color: '#334155', marginBottom: 10, textTransform: 'uppercase' },
+  statusText: { fontSize: 13, fontWeight: '700' },
+
+  section: { marginBottom: 24 },
+  sectionHeader: { marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+
   statusRow: { gap: 10, paddingRight: 20 },
   statusChip: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#bfdbfe',
-    borderRadius: 999,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     minWidth: 96,
@@ -358,60 +440,126 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statusChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  statusChipText: { color: '#2563eb', fontWeight: '800', fontSize: 13 },
+  statusChipText: { color: '#0f172a', fontWeight: '600', fontSize: 13 },
   statusChipTextActive: { color: '#fff' },
-  infoCard: {
-    backgroundColor: '#fff',
-    borderRadius: 22,
+
+  partyBlock: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 18,
   },
-  infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  iconBox: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  infoHeaderCopy: { flex: 1 },
-  infoTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
-  infoSubtext: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '600' },
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
-  infoBody: { flex: 1, fontSize: 14, color: '#475569', lineHeight: 21, fontWeight: '600' },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16, marginBottom: 12 },
-  detailLabel: { flex: 1, fontSize: 14, color: '#64748b', fontWeight: '600' },
-  detailLabelStrong: { color: '#0f172a', fontWeight: '800' },
-  detailValue: { flex: 1, fontSize: 14, color: '#0f172a', textAlign: 'right', fontWeight: '700' },
-  detailValueStrong: { fontSize: 16, fontWeight: '900' },
+  customerHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  customerAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' },
+  customerAvatarText: { fontSize: 18, fontWeight: '700', color: '#2563eb' },
+  customerHeaderInfo: { flex: 1 },
+  customerName: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
+  customerPhone: { fontSize: 14, color: '#64748b', marginTop: 2, fontWeight: '500' },
+  customerDivider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 16 },
+  customerContactList: { gap: 12 },
+  customerContactRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  customerContactText: { flex: 1, fontSize: 14, color: '#475569', lineHeight: 20, fontWeight: '500' },
+
+  detailsGrid: { flexDirection: 'row', gap: 12 },
+  detailItem: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  detailLabel: { fontSize: 11, fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 },
+  detailValue: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+
+  itemsContainer: {
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  itemsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  itemsHeaderLabel: { flex: 1, fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' },
+  itemsHeaderValue: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', textAlign: 'right' },
   lineItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingVertical: 12,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  lineItemLeft: { flex: 1, marginRight: 12 },
+  lineItemName: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  lineItemMeta: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '500' },
+  lineItemDescription: { marginTop: 6, fontSize: 13, color: '#94a3b8', lineHeight: 18 },
+  lineItemTotal: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+
+  totalsContainer: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  totalLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
+  totalValue: { fontSize: 14, color: '#0f172a', fontWeight: '600' },
+  totalRowHighlight: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  totalLabelBold: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  totalValueBold: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
+  balanceRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, backgroundColor: '#eff6ff', padding: 12, borderRadius: 8 },
+  balanceLabelBold: { fontSize: 14, fontWeight: '700', color: '#2563eb' },
+  balanceValueBold: { fontSize: 15, fontWeight: '700', color: '#2563eb' },
+
+  notesText: { fontSize: 14, color: '#475569', lineHeight: 22, fontWeight: '500' },
+
+  linkedJobBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     gap: 12,
   },
-  lineItemLeft: { flex: 1 },
-  lineItemName: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
-  lineItemMeta: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '600' },
-  lineItemDescription: { marginTop: 6, fontSize: 13, color: '#475569', lineHeight: 20 },
-  lineItemTotal: { fontSize: 15, fontWeight: '900', color: '#0f172a' },
-  divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 6 },
-  notesText: { marginTop: 10, fontSize: 14, color: '#475569', lineHeight: 22, fontWeight: '600' },
+  linkedJobIcon: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center' },
+  linkedJobInfo: { flex: 1 },
+  linkedJobTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  linkedJobId: { fontSize: 13, fontWeight: '500', color: '#64748b', marginTop: 2 },
+
   stateContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  stateTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', textAlign: 'center' },
-  stateText: { marginTop: 10, fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22 },
+  stateTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', textAlign: 'center' },
+  stateText: { marginTop: 8, fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22 },
   retryButton: {
-    marginTop: 18,
+    marginTop: 16,
     backgroundColor: '#2563eb',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
-  retryButtonText: { color: '#fff', fontWeight: '800' },
+  retryButtonText: { color: '#fff', fontWeight: '600' },
 });
+
 
 export default InvoiceDetailScreen;

@@ -511,15 +511,15 @@ const buildUpdateJobPayload = (
       ? overrides.serviceAddress
       : job.serviceAddress
         ? {
-            line1: job.serviceAddress.line1 || null,
-            line2: job.serviceAddress.line2 || null,
-            city: job.serviceAddress.city || null,
-            stateOrProvince: job.serviceAddress.stateOrProvince || null,
-            postalCode: job.serviceAddress.postalCode || null,
-            country: job.serviceAddress.country || null,
-            latitude: job.serviceAddress.latitude ?? null,
-            longitude: job.serviceAddress.longitude ?? null,
-          }
+          line1: job.serviceAddress.line1 || null,
+          line2: job.serviceAddress.line2 || null,
+          city: job.serviceAddress.city || null,
+          stateOrProvince: job.serviceAddress.stateOrProvince || null,
+          postalCode: job.serviceAddress.postalCode || null,
+          country: job.serviceAddress.country || null,
+          latitude: job.serviceAddress.latitude ?? null,
+          longitude: job.serviceAddress.longitude ?? null,
+        }
         : undefined,
   description: overrides?.description ?? job.description ?? null,
   assignments: (job.assignments || [])
@@ -830,15 +830,15 @@ const JobDetailScreen: React.FC = () => {
           serviceAddress: editUseCustomerPrimaryAddress
             ? undefined
             : {
-                line1: editAddressLine1.trim(),
-                line2: editAddressLine2.trim() || null,
-                city: editCity.trim(),
-                stateOrProvince: editState.trim(),
-                postalCode: editPostalCode.trim(),
-                country: editCountry.trim(),
-                latitude: job.serviceAddress?.latitude ?? null,
-                longitude: job.serviceAddress?.longitude ?? null,
-              },
+              line1: editAddressLine1.trim(),
+              line2: editAddressLine2.trim() || null,
+              city: editCity.trim(),
+              stateOrProvince: editState.trim(),
+              postalCode: editPostalCode.trim(),
+              country: editCountry.trim(),
+              latitude: job.serviceAddress?.latitude ?? null,
+              longitude: job.serviceAddress?.longitude ?? null,
+            },
           description: editDescription.trim() || null,
         })
       );
@@ -1117,15 +1117,15 @@ const JobDetailScreen: React.FC = () => {
       const pickerResult =
         source === 'camera'
           ? await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            })
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.8,
+          })
           : await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              quality: 0.8,
-            });
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.8,
+          });
 
       if (pickerResult.canceled || !pickerResult.assets?.length) {
         return;
@@ -1181,15 +1181,15 @@ const JobDetailScreen: React.FC = () => {
             ? 'Select Country'
             : activeSheet === 'serviceState'
               ? 'Select State / Province'
-          : activeSheet === 'date'
-            ? 'Select Date'
-            : activeSheet === 'time'
-              ? 'Select Time'
-              : activeSheet === 'duration'
-                ? 'Select Duration'
-          : activeSheet === 'editNote'
-            ? 'Edit Note'
-          : 'Edit Job';
+              : activeSheet === 'date'
+                ? 'Select Date'
+                : activeSheet === 'time'
+                  ? 'Select Time'
+                  : activeSheet === 'duration'
+                    ? 'Select Duration'
+                    : activeSheet === 'editNote'
+                      ? 'Edit Note'
+                      : 'Edit Job';
   const sheetOptions =
     activeSheet === 'jobType'
       ? JOB_TYPE_OPTIONS
@@ -1201,9 +1201,9 @@ const JobDetailScreen: React.FC = () => {
             ? countryOptions.map(option => option.value)
             : activeSheet === 'serviceState'
               ? stateOptions.map(option => option.value)
-          : activeSheet === 'duration'
-            ? DURATION_OPTIONS
-          : [];
+              : activeSheet === 'duration'
+                ? DURATION_OPTIONS
+                : [];
   const getSheetOptionLabel = (option: string) => {
     if (activeSheet === 'serviceCountry') {
       return countryOptions.find(item => item.value === option)?.label || option;
@@ -1228,7 +1228,7 @@ const JobDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      
+
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
@@ -1600,25 +1600,25 @@ const JobDetailScreen: React.FC = () => {
       {job ? (
         <View style={styles.footer}>
           {canStart || canComplete ? (
-          <TouchableOpacity
-            onPress={handleStatusUpdate}
-            style={[styles.startBtn, canComplete && styles.completeBtn]}
-            activeOpacity={0.9}
-            disabled={isStatusUpdating}
-          >
-            {isStatusUpdating ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <>
-                {canStart ? (
-                  <Play size={20} color="white" fill="white" />
-                ) : (
-                  <CheckCircle2 size={18} color="white" strokeWidth={2.5} />
-                )}
-                <Text style={styles.startBtnText}>{canStart ? 'Start Job' : 'Complete Job'}</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleStatusUpdate}
+              style={[styles.startBtn, canComplete && styles.completeBtn]}
+              activeOpacity={0.9}
+              disabled={isStatusUpdating}
+            >
+              {isStatusUpdating ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <>
+                  {canStart ? (
+                    <Play size={20} color="white" fill="white" />
+                  ) : (
+                    <CheckCircle2 size={18} color="white" strokeWidth={2.5} />
+                  )}
+                  <Text style={styles.startBtnText}>{canStart ? 'Start Job' : 'Complete Job'}</Text>
+                </>
+              )}
+            </TouchableOpacity>
           ) : (
             <View style={styles.statusFooterCard}>
               <Text style={styles.statusFooterLabel}>Current status</Text>
@@ -1700,14 +1700,14 @@ const JobDetailScreen: React.FC = () => {
                   onPress={() => setEditUseCustomerPrimaryAddress(value => !value)}
                   activeOpacity={0.9}
                 >
-                <Text
-                  style={[
-                    styles.addressModeChipText,
-                    editUseCustomerPrimaryAddress && styles.addressModeChipTextActive,
-                  ]}
-                >
-                  {editUseCustomerPrimaryAddress ? 'Using customer primary' : 'Custom address'}
-                </Text>
+                  <Text
+                    style={[
+                      styles.addressModeChipText,
+                      editUseCustomerPrimaryAddress && styles.addressModeChipTextActive,
+                    ]}
+                  >
+                    {editUseCustomerPrimaryAddress ? 'Using customer primary' : 'Custom address'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 

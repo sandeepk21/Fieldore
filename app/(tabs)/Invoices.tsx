@@ -319,7 +319,7 @@ const InvoicesScreen: React.FC = () => {
                 >
                   <View style={styles.cardHeader}>
                     <View style={styles.iconWrap}>
-                      <FileText size={20} color="#2563eb" />
+                      <Text style={styles.avatarText}>{getInvoiceTitle(invoice).charAt(0).toUpperCase()}</Text>
                     </View>
                     <View style={styles.cardTitleWrap}>
                       <Text style={styles.cardTitle}>{getInvoiceTitle(invoice)}</Text>
@@ -333,11 +333,15 @@ const InvoicesScreen: React.FC = () => {
                   </View>
 
                   <View style={styles.cardFooter}>
-                    <View>
-                      <Text style={styles.footerLabel}>Due Date</Text>
-                      <Text style={styles.footerValue}>{formatDisplayDate(invoice.dueOn)}</Text>
+                    <View style={styles.amountBlock}>
+                      <Text style={styles.amountLabel}>Due Date</Text>
+                      <Text style={styles.amountValue}>{formatDisplayDate(invoice.dueOn)}</Text>
                     </View>
-                    <Text style={styles.amountText}>{formatInvoiceCurrency(invoice.totalAmount)}</Text>
+                    <View style={styles.amountDivider} />
+                    <View style={styles.amountBlock}>
+                      <Text style={styles.amountLabel}>Amount</Text>
+                      <Text style={styles.amountValue}>{formatInvoiceCurrency(invoice.totalAmount)}</Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               );
@@ -440,29 +444,29 @@ const InvoicesScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { paddingHorizontal: 15, paddingTop: 16, paddingBottom: 8 },
+  container: { flex: 1, backgroundColor: '#ffffff' },
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
   title: { fontSize: 28, fontWeight: '900', color: '#0f172a' },
-  subtitle: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '600' },
-  searchRow: { paddingHorizontal: 15, paddingTop: 8, flexDirection: 'row', gap: 12 },
+  subtitle: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '500' },
+  searchRow: { paddingHorizontal: 16, paddingTop: 8, flexDirection: 'row', gap: 12 },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     paddingHorizontal: 16,
-    height: 54,
+    height: 50,
   },
-  searchInput: { flex: 1, fontSize: 14, color: '#0f172a', fontWeight: '600' },
+  searchInput: { flex: 1, fontSize: 14, color: '#0f172a', fontWeight: '500' },
   filterButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 20,
-    backgroundColor: '#fff',
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     alignItems: 'center',
@@ -474,8 +478,8 @@ const styles = StyleSheet.create({
   },
   filterBadge: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -485,69 +489,75 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   filterBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
-  statusScroller: { marginTop: 14, maxHeight: 35 },
-  statusRow: { paddingHorizontal: 20, gap: 10, paddingRight: 30 },
+  statusScroller: { marginTop: 14, maxHeight: 38 },
+  statusRow: { paddingHorizontal: 16, gap: 10, paddingRight: 30 },
   statusChip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   statusChipActive: {
-    backgroundColor: '#0f172a',
-    borderColor: '#0f172a',
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
   },
   statusChipText: {
-    color: '#64748b',
-    fontSize: 12,
-    fontWeight: '800',
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '600',
   },
   statusChipTextActive: {
     color: '#ffffff',
   },
   list: { flex: 1 },
-  listContent: { paddingHorizontal: 15, paddingTop: 18, paddingBottom: 120 },
+  listContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 120 },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 18,
-    marginBottom: 14,
+    elevation: 3,
+    shadowColor: '#64748b',
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    marginBottom: 16,
   },
+
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#eff6ff',
   },
+  avatarText: { fontSize: 18, fontWeight: '700', color: '#2563eb' },
   cardTitleWrap: { flex: 1 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a', },
-  cardSubtitle: { marginTop: 4, fontSize: 12, color: '#64748b', fontWeight: '600' },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#0f172a', },
+  cardSubtitle: { marginTop: 2, fontSize: 13, color: '#64748b', fontWeight: '500' },
   statusBadge: {
-    borderRadius: 999,
+    borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+  statusText: { fontSize: 11, fontWeight: '700' },
   cardFooter: {
-    marginTop: 18,
-    paddingTop: 14,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: '#e2e8f0',
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
   },
-  footerLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '800', textTransform: 'uppercase' },
-  footerValue: { marginTop: 4, fontSize: 14, color: '#0f172a', fontWeight: '700' },
-  amountText: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
+  amountBlock: { flex: 1 },
+  amountDivider: { width: 1, backgroundColor: '#e2e8f0', marginHorizontal: 16 },
+  amountLabel: { fontSize: 11, fontWeight: '700', color: '#94a3b8', marginBottom: 4, textTransform: 'uppercase' },
+  amountValue: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
   stateContainer: {
     flex: 1,
     paddingHorizontal: 32,
@@ -567,14 +577,14 @@ const styles = StyleSheet.create({
   emptyCard: {
     marginTop: 40,
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 24,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     paddingVertical: 36,
   },
-  emptyTitle: { marginTop: 14, fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  emptyTitle: { marginTop: 14, fontSize: 18, fontWeight: '700', color: '#0f172a' },
   emptyText: { marginTop: 8, fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22 },
   filterContent: {
     paddingBottom: 24,

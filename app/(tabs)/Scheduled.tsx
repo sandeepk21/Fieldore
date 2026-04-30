@@ -402,7 +402,7 @@ const Scheduled: React.FC = () => {
             style={[
               styles.timeBlock,
               (item.color === 'blue' || item.status.toLowerCase() === 'in progress') &&
-                styles.timeBlockActive,
+              styles.timeBlockActive,
             ]}
           >
             <Clock
@@ -418,7 +418,7 @@ const Scheduled: React.FC = () => {
               style={[
                 styles.timeText,
                 (item.color === 'blue' || item.status.toLowerCase() === 'in progress') &&
-                  styles.timeTextActive,
+                styles.timeTextActive,
               ]}
               numberOfLines={1}
             >
@@ -433,10 +433,10 @@ const Scheduled: React.FC = () => {
             </View>
             <Text style={styles.jobTitle}>{item.title}</Text>
             <View style={styles.clientRow}>
-             <Zap size={10} color="#f59e0b" fill="#f59e0b" />
+              <Zap size={10} color="#f59e0b" fill="#f59e0b" />
               <Text style={styles.clientName}>{item.client}</Text>
             </View>
-            
+
           </View>
 
           <View style={styles.arrowBox}>
@@ -444,7 +444,7 @@ const Scheduled: React.FC = () => {
           </View>
         </TouchableOpacity>
       </View>
-      
+
     ),
     [handleOpenJob]
   );
@@ -566,29 +566,29 @@ const Scheduled: React.FC = () => {
           </View>
         </View>
 
-      <FlatList
-        ref={agendaListRef}
-        style={styles.agendaList}
-        data={selectedJobs}
-        keyExtractor={item => `${item.id}-${item.sortTimestamp}`}
-        renderItem={renderAgendaItem}
-        ListEmptyComponent={
-          <EmptyAgendaState
-            selectedDay={selectedDay}
-            selectedDateKey={selectedDateKey}
-            loading={isLoading}
-          />
-        }
-        contentContainerStyle={styles.agendaListContent}
-        showsVerticalScrollIndicator={false}
-        bounces
-        alwaysBounceVertical={selectedJobs.length <= 3}
-        automaticallyAdjustContentInsets={false}
-        contentInsetAdjustmentBehavior="never"
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
-        }
-      />
+        <FlatList
+          ref={agendaListRef}
+          style={styles.agendaList}
+          data={selectedJobs}
+          keyExtractor={item => `${item.id}-${item.sortTimestamp}`}
+          renderItem={renderAgendaItem}
+          ListEmptyComponent={
+            <EmptyAgendaState
+              selectedDay={selectedDay}
+              selectedDateKey={selectedDateKey}
+              loading={isLoading}
+            />
+          }
+          contentContainerStyle={styles.agendaListContent}
+          showsVerticalScrollIndicator={false}
+          bounces
+          alwaysBounceVertical={selectedJobs.length <= 3}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+          }
+        />
       </View>
 
       <TouchableOpacity style={styles.fab} activeOpacity={0.9} onPress={handleOpenCreateJob}>
