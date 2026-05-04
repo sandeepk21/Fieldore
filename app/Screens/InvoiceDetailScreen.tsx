@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
   invoiceNumberLg: { fontSize: 22, fontWeight: '800', color: '#0f172a' },
   amountCard: {
     flexDirection: 'row',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
