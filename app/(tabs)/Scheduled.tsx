@@ -1,19 +1,30 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import {
+  AlertCircle,
+  Briefcase,
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Clock,
-  MoreVertical,
+  MapPin,
+  MoreHorizontal,
+  Navigation,
   Plus,
-  Zap
+  RefreshCw,
+  User,
+  XCircle,
+  Zap,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
   FlatList,
+  Linking,
+  Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -26,17 +37,20 @@ import JobsViewSwitcher from '@/src/components/JobsViewSwitcher';
 import { getJobCustomerName, getJobDisplayTitle, getJobsApi } from '@/src/services/jobService';
 
 const { width } = Dimensions.get('window');
-const COLUMN_WIDTH = (width - 48) / 7;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 
 type CalendarJob = {
   id: string;
+  jobNumber: string;
+  jobType: string;
+  priority: string;
   title: string;
   client: string;
+  address: string;
   status: string;
   time: string;
-  color: 'blue' | 'amber' | 'green' | 'red' | 'slate';
+  color: 'blue' | 'amber' | 'green' | 'red' | 'slate' | 'orange';
   dateKey: string;
   sortTimestamp: number;
 };
@@ -44,8 +58,6 @@ type CalendarJob = {
 type JobsByDate = Record<string, CalendarJob[]>;
 
 type FetchMode = 'initial' | 'refresh';
-
-const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 const startOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
@@ -86,8 +98,9 @@ const formatTimeLabel = (start?: string | null, end?: string | null) => {
   if (!startDate) return 'No time';
 
   const formatter = new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
   });
 
   const startLabel = formatter.format(startDate);
@@ -102,9 +115,9 @@ const getStatusColor = (status?: string | null): CalendarJob['color'] => {
 
   switch (normalized) {
     case 'inprogress':
-      return 'blue';
+      return 'orange';
     case 'scheduled':
-      return 'amber';
+      return 'slate';
     case 'completed':
       return 'green';
     case 'cancelled':
@@ -114,9 +127,18 @@ const getStatusColor = (status?: string | null): CalendarJob['color'] => {
   }
 };
 
+const STATUS_COLORS = {
+  orange: { bg: '#fff7ed', text: '#ea580c', border: '#fdba74', icon: '#f97316' },
+  slate: { bg: '#f8fafc', text: '#475569', border: '#cbd5e1', icon: '#64748b' },
+  green: { bg: '#f0fdf4', text: '#16a34a', border: '#86efac', icon: '#22c55e' },
+  red: { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5', icon: '#ef4444' },
+  blue: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', icon: '#3b82f6' },
+  amber: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', icon: '#f59e0b' },
+};
+
 const normalizeStatusLabel = (status?: string | null) => {
   if (!status?.trim()) return 'Scheduled';
-  if (status.trim() === 'InProgress') return 'In Progress';
+  if (status.trim().toLowerCase().replace(/\s+/g, '') === 'inprogress') return 'In Progress';
   return status.trim();
 };
 
@@ -127,38 +149,41 @@ const mapJobToCalendar = (job: JobResponse): CalendarJob | null => {
   const id = job.id?.trim() || job.jobNumber?.trim();
   if (!id) return null;
 
+  const addressParts = [job.serviceAddress?.line1, job.serviceAddress?.city].filter(Boolean);
+  const address = addressParts.length > 0 ? addressParts.join(', ') : 'No Address';
+
+  const normalizedStatus = normalizeStatusLabel(job.status);
+  let color: CalendarJob['color'] = getStatusColor(job.status);
+
   return {
     id,
+    jobNumber: job.jobNumber || '',
+    jobType: job.jobType || 'General',
+    priority: job.priority || 'Normal',
     title: getJobDisplayTitle(job),
     client: getJobCustomerName(job),
-    status: normalizeStatusLabel(job.status),
+    address,
+    status: normalizedStatus,
     time: formatTimeLabel(job.scheduledStartAt, job.scheduledEndAt),
-    color: getStatusColor(job.status),
+    color,
     dateKey: toDateKeyLocal(scheduledStart),
     sortTimestamp: scheduledStart.getTime(),
   };
 };
 
-const buildMonthCells = (month: Date) => {
-  const firstDay = startOfMonth(month);
-  const lastDay = endOfMonth(month);
-  const leadingSlots = firstDay.getDay();
-  const totalDays = lastDay.getDate();
-  const cells: (number | null)[] = [];
+const getDaysInMonth = (month: Date) => {
+  const lastDay = endOfMonth(month).getDate();
+  const daysOfWeek = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-  for (let i = 0; i < leadingSlots; i += 1) {
-    cells.push(null);
-  }
-
-  for (let day = 1; day <= totalDays; day += 1) {
-    cells.push(day);
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
-  }
-
-  return cells;
+  return Array.from({ length: lastDay }, (_, i) => {
+    const d = new Date(month.getFullYear(), month.getMonth(), i + 1);
+    return {
+      dateKey: toDateKeyLocal(d),
+      dayOfWeek: daysOfWeek[d.getDay()],
+      dayNumber: d.getDate(),
+      date: d,
+    };
+  });
 };
 
 const buildDefaultSelectedDateKey = (month: Date) => {
@@ -169,33 +194,21 @@ const buildDefaultSelectedDateKey = (month: Date) => {
   return isCurrentMonth ? toDateKeyLocal(today) : toDateKeyLocal(startOfMonth(month));
 };
 
-const getDotColor = (color: CalendarJob['color']) => {
-  switch (color) {
-    case 'blue':
-      return '#2563eb';
-    case 'amber':
-      return '#f59e0b';
-    case 'green':
-      return '#10b981';
-    case 'red':
-      return '#ef4444';
-    default:
-      return '#94a3b8';
-  }
-};
-
-const isSameMonth = (left: Date, right: Date) =>
-  left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
-
 const JobCardSkeleton = () => (
   <View style={styles.jobCard}>
-    <View style={styles.timeBlock} />
+    <View style={styles.skeletonHeader}>
+      <View style={[styles.skeletonLine, { width: 120, height: 24, borderRadius: 12 }]} />
+      <View style={[styles.skeletonLine, { width: 80, height: 24, borderRadius: 12 }]} />
+    </View>
     <View style={styles.skeletonContent}>
-      <View style={[styles.skeletonLine, styles.skeletonStatus]} />
       <View style={[styles.skeletonLine, styles.skeletonTitle]} />
       <View style={[styles.skeletonLine, styles.skeletonClient]} />
     </View>
-    <View style={styles.arrowBox} />
+    <View style={styles.divider} />
+    <View style={styles.skeletonFooter}>
+      <View style={[styles.skeletonLine, { width: 100, height: 16 }]} />
+      <View style={[styles.skeletonLine, { width: 80, height: 16 }]} />
+    </View>
   </View>
 );
 
@@ -210,11 +223,11 @@ const EmptyAgendaState = ({
 }) => {
   if (loading) {
     return (
-      <>
+      <View style={styles.agendaContent}>
         <JobCardSkeleton />
         <JobCardSkeleton />
         <JobCardSkeleton />
-      </>
+      </View>
     );
   }
 
@@ -233,6 +246,7 @@ const EmptyAgendaState = ({
 
 const Scheduled: React.FC = () => {
   const agendaListRef = useRef<FlatList<CalendarJob>>(null);
+  const daysScrollRef = useRef<ScrollView>(null);
   const isFetchingRef = useRef(false);
   const requestIdRef = useRef(0);
   const hasFocusedOnceRef = useRef(false);
@@ -248,7 +262,7 @@ const Scheduled: React.FC = () => {
   const [error, setError] = useState('');
 
   const monthLabel = useMemo(() => formatMonthLabel(currentMonth), [currentMonth]);
-  const monthCells = useMemo(() => buildMonthCells(currentMonth), [currentMonth]);
+  const daysInMonthList = useMemo(() => getDaysInMonth(currentMonth), [currentMonth]);
 
   const jobsByDate = useMemo<JobsByDate>(() => {
     return jobs.reduce<JobsByDate>((acc, job) => {
@@ -270,10 +284,15 @@ const Scheduled: React.FC = () => {
     return parsed ? parsed.getDate() : null;
   }, [selectedDateKey]);
 
-  const agendaTitle = useMemo(() => {
-    const todayKey = toDateKeyLocal(new Date());
-    return selectedDateKey === todayKey ? "Today's Agenda" : `Jobs for ${formatAgendaDate(selectedDateKey)}`;
-  }, [selectedDateKey]);
+  // Scroll to selected date in the horizontal scroll view
+  useEffect(() => {
+    if (selectedDay && daysScrollRef.current) {
+      // Approximate position: each day item is ~60px wide + some gap
+      const itemWidth = 60;
+      const offset = (selectedDay - 1) * itemWidth - (width / 2) + (itemWidth / 2);
+      daysScrollRef.current.scrollTo({ x: Math.max(0, offset), animated: true });
+    }
+  }, [selectedDay, currentMonth]);
 
   const fetchMonthJobs = useCallback(
     async (month: Date, mode: FetchMode = 'initial') => {
@@ -387,94 +406,184 @@ const Scheduled: React.FC = () => {
     router.push('../Screens/CreateJobScreen');
   };
 
-  const today = new Date();
-  const todayKey = toDateKeyLocal(today);
+  const handleNavigate = useCallback((address: string) => {
+    if (!address || address === 'No Address') {
+      Alert.alert('No Address', 'This job does not have a valid address to navigate to.');
+      return;
+    }
+    const query = encodeURIComponent(address);
+    const url = Platform.select({
+      ios: `maps:0,0?q=${query}`,
+      android: `geo:0,0?q=${query}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+    });
+    Linking.openURL(url!).catch(() => {
+      Alert.alert('Error', 'Unable to open maps application.');
+    });
+  }, []);
 
   const renderAgendaItem = useCallback(
-    ({ item }: { item: CalendarJob }) => (
-      <View style={styles.agendaContent}>
-        <TouchableOpacity
-          style={styles.jobCard}
-          activeOpacity={0.9}
-          onPress={() => handleOpenJob(item.id)}
-        >
-          <View
-            style={[
-              styles.timeBlock,
-              (item.color === 'blue' || item.status.toLowerCase() === 'in progress') &&
-              styles.timeBlockActive,
-            ]}
+    ({ item }: { item: CalendarJob }) => {
+      const isInProgress = item.status === 'In Progress';
+      const statusColorMap = STATUS_COLORS[item.color] || STATUS_COLORS.slate;
+      
+      return (
+        <View style={styles.agendaContent}>
+          <TouchableOpacity 
+            style={styles.jobCard}
+            onPress={() => handleOpenJob(item.id)}
+            activeOpacity={0.8}
           >
-            <Clock
-              size={16}
-              color={
-                item.color === 'blue' || item.status.toLowerCase() === 'in progress'
-                  ? 'white'
-                  : '#94a3b8'
-              }
-              strokeWidth={3}
-            />
-            <Text
-              style={[
-                styles.timeText,
-                (item.color === 'blue' || item.status.toLowerCase() === 'in progress') &&
-                styles.timeTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              {item.time === 'No time' ? 'TBD' : item.time.split(' - ')[0]}
-            </Text>
-          </View>
-
-          <View style={styles.jobDetails}>
-            <View style={styles.statusRow}>
-              {item.status.toLowerCase() === 'in progress' && <View style={styles.pulseDot} />}
-              <Text style={styles.statusLabel}>{item.status.toUpperCase()}</Text>
+            <View style={styles.cardHeader}>
+              <View style={styles.timePill}>
+                <Text style={styles.timePillText}>{item.time}</Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: statusColorMap.bg, borderColor: statusColorMap.border }]}>
+                {isInProgress && (
+                  <RefreshCw size={12} color={statusColorMap.icon} style={{ marginRight: 4 }} />
+                )}
+                {item.status === 'Scheduled' && (
+                  <Clock size={12} color={statusColorMap.icon} style={{ marginRight: 4 }} />
+                )}
+                {item.status === 'Completed' && (
+                  <CheckCircle size={12} color={statusColorMap.icon} style={{ marginRight: 4 }} />
+                )}
+                {item.status === 'Cancelled' && (
+                  <XCircle size={12} color={statusColorMap.icon} style={{ marginRight: 4 }} />
+                )}
+                <Text style={[styles.statusPillText, { color: statusColorMap.text }]}>
+                  {item.status}
+                </Text>
+              </View>
+              <View style={{flex: 1}} />
+              {!!item.jobNumber && (
+                <Text style={styles.jobNumberText}>#{item.jobNumber}</Text>
+              )}
             </View>
+
             <Text style={styles.jobTitle}>{item.title}</Text>
-            <View style={styles.clientRow}>
-              <Zap size={10} color="#f59e0b" fill="#f59e0b" />
-              <Text style={styles.clientName}>{item.client}</Text>
+
+            <View style={styles.infoStack}>
+              <View style={styles.infoItem}>
+                <User size={14} color="#64748b" />
+                <Text style={styles.infoText}>{item.client}</Text>
+              </View>
+              <View style={[styles.infoItem, { justifyContent: 'space-between', alignItems: 'center' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 12 }}>
+                  <MapPin size={14} color="#64748b" />
+                  <Text style={[styles.infoText, { flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">
+                    {item.address}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.navigateBtn} 
+                  onPress={() => handleNavigate(item.address)}
+                  activeOpacity={0.7}
+                >
+                  <Navigation size={14} color="#2563eb" />
+                  <Text style={styles.navigateBtnText}>Directions</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-          </View>
+            <View style={styles.divider} />
 
-          <View style={styles.arrowBox}>
-            <ChevronRight size={18} color="#cbd5e1" />
-          </View>
-        </TouchableOpacity>
-      </View>
-
-    ),
-    [handleOpenJob]
+            <View style={styles.cardFooter}>
+              <View style={styles.badgeRow}>
+                <View style={styles.typeBadge}>
+                  <Briefcase size={12} color="#64748b" />
+                  <Text style={styles.typeText}>{item.jobType}</Text>
+                </View>
+                {item.priority === 'High' && (
+                  <View style={styles.priorityBadge}>
+                    <AlertCircle size={12} color="#ef4444" />
+                    <Text style={styles.priorityText}>High</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.viewDetailsBtn}>
+                <Text style={styles.viewDetailsText}>View Details</Text>
+                <ChevronRight size={16} color="#2563eb" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+      );
+    },
+    [handleOpenJob, handleNavigate]
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <TouchableOpacity style={styles.monthNavBtn} onPress={() => handleChangeMonth(-1)}>
-            <ChevronLeft size={20} color="#64748b" />
-          </TouchableOpacity>
-
-          <View style={styles.monthTitleBox}>
-            <Text style={styles.monthTitle}>Jobs</Text>
-            <Text style={styles.monthSubtitle}>{monthJobCount} scheduled jobs</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.titleText}>Jobs</Text>
+            <Text style={styles.subtitleText}>{monthJobCount} Scheduled Jobs</Text>
           </View>
-
-          <TouchableOpacity style={styles.monthNavBtn} onPress={() => handleChangeMonth(1)}>
-            <ChevronRight size={20} color="#64748b" />
+          <TouchableOpacity style={styles.moreBtn} onPress={handleRefresh}>
+            <MoreHorizontal size={20} color="#64748b" />
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.moreBtn} onPress={handleRefresh}>
-          <MoreVertical size={20} color="#94a3b8" />
-        </TouchableOpacity>
+        <JobsViewSwitcher activeView="schedule" />
       </View>
 
-      <View style={styles.switcherWrap}>
-        <JobsViewSwitcher activeView="schedule" />
-        <Text style={styles.scheduleMonthLabel}>{monthLabel}</Text>
+      {/* Month Selector */}
+      <View style={styles.monthHeaderRow}>
+        <Text style={styles.monthHeaderText}>{monthLabel}</Text>
+        <View style={styles.monthNavGroup}>
+          <TouchableOpacity style={styles.monthNavBtn} onPress={() => handleChangeMonth(-1)}>
+            <ChevronLeft size={20} color="#0f172a" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.monthNavBtn} onPress={() => handleChangeMonth(1)}>
+            <ChevronRight size={20} color="#0f172a" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Horizontal Days Selector */}
+      <View style={styles.daysContainer}>
+        <ScrollView
+          ref={daysScrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.daysScrollContent}
+        >
+          {daysInMonthList.map((item) => {
+            const isSelected = selectedDateKey === item.dateKey;
+            const dayJobs = jobsByDate[item.dateKey] || [];
+            const hasEvents = dayJobs.length > 0;
+            const hasInProgress = dayJobs.some(j => j.status === 'In Progress');
+
+            return (
+              <TouchableOpacity
+                key={item.dateKey}
+                style={[styles.dayItem, isSelected && styles.dayItemSelected]}
+                onPress={() => {
+                  agendaListRef.current?.scrollToOffset({ offset: 0, animated: false });
+                  setSelectedDateKey(item.dateKey);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.dayOfWeek, isSelected && styles.dayOfWeekSelected]}>
+                  {item.dayOfWeek}
+                </Text>
+                <Text style={[styles.dayNumber, isSelected && styles.dayNumberSelected]}>
+                  {item.dayNumber}
+                </Text>
+                {/* Dot Indicator */}
+                {(hasEvents || isSelected) && (
+                  <View style={[
+                    styles.dayDot,
+                    isSelected ? styles.dayDotSelected :
+                      hasInProgress ? styles.dayDotOrange : styles.dayDotGray
+                  ]} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {!!error && (
@@ -486,86 +595,8 @@ const Scheduled: React.FC = () => {
         </View>
       )}
 
-      <View style={styles.calendarContainer}>
-        <View style={styles.weekDaysRow}>
-          {weekDays.map((day, index) => (
-            <Text key={`${day}-${index}`} style={styles.weekDayText}>
-              {day}
-            </Text>
-          ))}
-        </View>
-
-        <View style={styles.daysGrid}>
-          {monthCells.map((day, index) => {
-            if (!day) {
-              return <View key={`empty-${index}`} style={styles.dayCell} />;
-            }
-
-            const dateKey = `${currentMonth.getFullYear()}-${pad(currentMonth.getMonth() + 1)}-${pad(day)}`;
-            const isSelected = selectedDateKey === dateKey;
-            const isToday = todayKey === dateKey;
-            const dayJobs = jobsByDate[dateKey] || [];
-            const hasEvents = dayJobs.length > 0;
-            const isCurrentVisibleMonth = isSameMonth(
-              currentMonth,
-              parseApiDate(`${dateKey}T00:00:00`) || currentMonth
-            );
-
-            return (
-              <TouchableOpacity
-                key={dateKey}
-                onPress={() => {
-                  agendaListRef.current?.scrollToOffset({ offset: 0, animated: false });
-                  setSelectedDateKey(dateKey);
-                }}
-                style={styles.dayCell}
-                activeOpacity={0.85}
-              >
-                <View
-                  style={[
-                    styles.dayCircle,
-                    isSelected && styles.dayCircleSelected,
-                    isToday && !isSelected && styles.dayCircleToday,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.dayText,
-                      !isCurrentVisibleMonth && styles.dayTextMuted,
-                      hasEvents && !isSelected && styles.dayTextHasJob,
-                      isToday && !isSelected && styles.dayTextToday,
-                      isSelected && styles.dayTextSelected,
-                    ]}
-                  >
-                    {day}
-                  </Text>
-                </View>
-
-                {hasEvents && !isSelected && (
-                  <View style={styles.dotsContainer}>
-                    {dayJobs.slice(0, 3).map(job => (
-                      <View
-                        key={`${job.id}-${job.sortTimestamp}`}
-                        style={[styles.dot, { backgroundColor: getDotColor(job.color) }]}
-                      />
-                    ))}
-                    {dayJobs.length > 3 && <View style={[styles.dot, styles.dotOverflow]} />}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
+      {/* Agenda List */}
       <View style={styles.agendaContainer}>
-        <View style={styles.agendaHeader}>
-          <Text style={styles.agendaTitle}>{agendaTitle}</Text>
-          <View style={styles.jobCountBadge}>
-            <Text style={styles.jobCountText}>{selectedJobs.length} JOBS</Text>
-          </View>
-        </View>
-
         <FlatList
           ref={agendaListRef}
           style={styles.agendaList}
@@ -583,8 +614,6 @@ const Scheduled: React.FC = () => {
           showsVerticalScrollIndicator={false}
           bounces
           alwaysBounceVertical={selectedJobs.length <= 3}
-          automaticallyAdjustContentInsets={false}
-          contentInsetAdjustmentBehavior="never"
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
           }
@@ -604,374 +633,383 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   header: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: '#ffffff',
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingTop: 8,
-    paddingBottom: 15,
-    gap: 16,
+    alignItems: 'flex-end',
+    marginBottom: 12,
   },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 12,
-  },
-  monthTitleBox: {
-    flex: 1,
-  },
-  monthTitle: {
-    fontSize: 24,
+  titleText: {
+    fontSize: 32,
     fontWeight: '900',
     color: '#0f172a',
-    letterSpacing: -1,
+    letterSpacing: -0.5,
   },
-  monthSubtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94a3b8',
-  },
-  monthNavBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
+  subtitleText: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '600',
   },
   moreBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     backgroundColor: '#f8fafc',
-    borderRadius: 12,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
   },
-  errorBox: {
-    marginHorizontal: 24,
-    marginBottom: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+  monthHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 16,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#b91c1c',
-  },
-  retryBtn: {
-    backgroundColor: '#dc2626',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  retryBtnText: {
-    fontSize: 12,
+  monthHeaderText: {
+    fontSize: 22,
     fontWeight: '800',
-    color: 'white',
+    color: '#0f172a',
+    letterSpacing: -0.5,
   },
-  switcherWrap: {
-    paddingHorizontal: 15,
+  monthNavGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  monthNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  daysContainer: {
     marginBottom: 16,
   },
-  scheduleMonthLabel: {
-    marginTop: 10,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#94a3b8',
-    textAlign: 'center',
+  daysScrollContent: {
+    paddingHorizontal: 12,
+    gap: 8,
   },
-  calendarContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-  },
-  weekDaysRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  weekDayText: {
-    width: COLUMN_WIDTH,
-    textAlign: 'center',
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#cbd5e1',
-    letterSpacing: 1,
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayCell: {
-    width: COLUMN_WIDTH,
-    height: 52,
+  dayItem: {
+    width: 56,
+    height: 76,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
-  dayCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayCircleSelected: {
+  dayItemSelected: {
     backgroundColor: '#2563eb',
   },
-  dayCircleToday: {
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  dayText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#94a3b8',
-  },
-  dayTextMuted: {
-    color: '#cbd5e1',
-  },
-  dayTextSelected: {
-    color: 'white',
-    fontWeight: '900',
-  },
-  dayTextHasJob: {
-    color: '#0f172a',
+  dayOfWeek: {
+    fontSize: 11,
     fontWeight: '700',
+    color: '#94a3b8',
+    marginBottom: 4,
+    letterSpacing: 0.5,
   },
-  dayTextToday: {
-    color: '#2563eb',
+  dayOfWeekSelected: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  dayNumber: {
+    fontSize: 18,
     fontWeight: '800',
+    color: '#334155',
   },
-  dotsContainer: {
-    flexDirection: 'row',
-    gap: 2,
-    position: 'absolute',
-    bottom: 4,
+  dayNumberSelected: {
+    color: 'white',
   },
-  dot: {
+  dayDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
+    marginTop: 6,
   },
-  dotOverflow: {
+  dayDotSelected: {
+    backgroundColor: 'white',
+  },
+  dayDotOrange: {
+    backgroundColor: '#f59e0b',
+  },
+  dayDotGray: {
     backgroundColor: '#cbd5e1',
   },
   agendaContainer: {
     flex: 1,
     backgroundColor: '#f8fafc',
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
-    borderTopWidth: 1,
-    borderTopColor: 'white',
-    marginTop: 8,
-  },
-  agendaHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 12,
-    paddingHorizontal: 15,
-    paddingTop: 32,
   },
   agendaList: {
     flex: 1,
   },
   agendaContent: {
-    paddingHorizontal: 15,
-    backgroundColor: '#f8fafc',
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   agendaListContent: {
-    paddingBottom: 120,
-    flexGrow: 1,
-  },
-  agendaTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-  jobCountBadge: {
-    backgroundColor: 'white',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  jobCountText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#94a3b8',
-    letterSpacing: 0.5,
+    paddingBottom: 100,
   },
   jobCard: {
     backgroundColor: 'white',
-    borderRadius: 28,
+    borderRadius: 16,
     padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  timeBlock: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  timeBlockActive: {
-    backgroundColor: '#2563eb',
-  },
-  timeText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#94a3b8',
-    marginTop: 4,
-  },
-  timeTextActive: {
-    color: 'white',
-  },
-  jobDetails: {
-    flex: 1,
-  },
-  statusRow: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    marginBottom: 12,
   },
-  pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#2563eb',
+  timePill: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 8,
   },
-  statusLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#94a3b8',
-    letterSpacing: 0.5,
-  },
-  jobTitle: {
-    fontSize: 15,
+  timePillText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#0f172a',
   },
-  clientRow: {
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  clientName: {
+  statusPillActive: {
+    backgroundColor: '#fef3c7', // amber-100
+  },
+  statusPillText: {
     fontSize: 11,
-    fontWeight: '500',
-    color: '#94a3b8',
-  },
-  jobTimeRange: {
-    marginTop: 8,
-    fontSize: 12,
     fontWeight: '700',
     color: '#64748b',
   },
-  arrowBox: {
-    width: 32,
-    height: 32,
+  statusPillTextActive: {
+    color: '#d97706', // amber-600
+  },
+  jobNumberText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  jobTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  infoStack: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  navigateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  navigateBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    width: '100%',
+    marginBottom: 16,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#f8fafc',
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  typeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+  },
+  priorityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  priorityText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ef4444',
+    textTransform: 'uppercase',
+  },
+  viewDetailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  viewDetailsText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: '#2563eb', // blue-600
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  errorBox: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#b91c1c',
+  },
+  retryBtn: {
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '700',
   },
   emptyState: {
-    flex: 1,
+    padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 32,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-    backgroundColor: '#f8fafc',
   },
   emptyIconBox: {
     width: 64,
     height: 64,
-    borderRadius: 24,
+    borderRadius: 16,
     backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#f1f5f9',
-    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#0f172a',
+    marginBottom: 4,
   },
   emptySubtitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94a3b8',
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748b',
     textAlign: 'center',
   },
+  skeletonHeader: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
   skeletonContent: {
-    flex: 1,
+    marginBottom: 16,
   },
   skeletonLine: {
-    borderRadius: 999,
     backgroundColor: '#e2e8f0',
-  },
-  skeletonStatus: {
-    width: 86,
-    height: 10,
-    marginBottom: 10,
+    borderRadius: 4,
   },
   skeletonTitle: {
-    width: '72%',
-    height: 16,
-    marginBottom: 10,
+    width: '70%',
+    height: 20,
+    marginBottom: 12,
   },
   skeletonClient: {
-    width: '48%',
-    height: 12,
+    width: '90%',
+    height: 16,
   },
-  fab: {
-    position: 'absolute',
-    bottom: 100,
-    right: 24,
+  skeletonFooter: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 20,
-    height: 64,
-    borderRadius: 22,
-    shadowColor: '#2563eb',
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
-  }
+  },
 });
 
 export default Scheduled;

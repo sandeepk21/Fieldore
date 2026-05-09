@@ -1,18 +1,27 @@
 import { router } from 'expo-router';
 import {
+  AlertCircle,
   Briefcase,
+  CheckCircle,
   ChevronRight,
   Clock,
+  MapPin,
   MoreHorizontal,
+  Navigation,
   Plus,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   User,
-  X
+  X,
+  XCircle,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
+  Linking,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -38,12 +47,15 @@ type StatusFilter = 'All' | 'Scheduled' | 'InProgress' | 'Completed' | 'Cancelle
 
 type JobCardModel = {
   id: string;
+  jobNumber: string;
   title: string;
   customer: string;
+  address: string;
   dateLabel: string;
   timeLabel: string;
   status: string;
   typeLabel: string;
+  priority: string;
   dateParts: { day: string; month: string };
 };
 
@@ -145,14 +157,20 @@ const mapJobToCard = (job: JobResponse): JobCardModel => {
     month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(start).toUpperCase();
   }
 
+  const addressParts = [job.serviceAddress?.line1, job.serviceAddress?.city].filter(Boolean);
+  const address = addressParts.length > 0 ? addressParts.join(', ') : 'No Address';
+
   return {
     id: job.id || job.jobNumber || Math.random().toString(),
+    jobNumber: job.jobNumber || '',
     title: getJobDisplayTitle(job),
     customer: getJobCustomerName(job),
+    address,
     dateLabel: formatJobDate(job.scheduledStartAt),
     timeLabel: formatJobTimeRange(job.scheduledStartAt, job.scheduledEndAt),
     status: job.status?.trim() || 'Scheduled',
     typeLabel: job.jobType?.trim() || 'General',
+    priority: job.priority || 'Normal',
     dateParts: { day, month },
   };
 };
@@ -220,7 +238,7 @@ const EmptyState = ({ loading }: { loading: boolean }) => (
           <Briefcase size={40} color="#2563eb" strokeWidth={1.5} />
         </View>
         <Text style={styles.emptyTitle}>No jobs found</Text>
-        <Text style={styles.emptySubtitle}>We couldn't find any jobs matching your criteria. Try adjusting the filters or search term.</Text>
+        <Text style={styles.emptySubtitle}>We couldn&apos;t find any jobs matching your criteria. Try adjusting the filters or search term.</Text>
       </>
     ) : null}
   </View>
@@ -321,9 +339,30 @@ const JobList: React.FC = () => {
     fetchJobs(1, 'initial');
   }, [fetchJobs]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     fetchJobs(1, 'refresh');
-  };
+  }, [fetchJobs]);
+
+  const handleNavigate = useCallback((address: string) => {
+    if (!address || address === 'No Address') {
+      Alert.alert('No Address', 'This job does not have a valid address to navigate to.');
+      return;
+    }
+    const query = encodeURIComponent(address);
+    const url = Platform.select({
+      ios: `maps:0,0?q=${query}`,
+      android: `geo:0,0?q=${query}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+    });
+    Linking.openURL(url!).catch(() => {
+      Alert.alert('Error', 'Unable to open maps application.');
+    });
+  }, []);
+
+  const handleApplyFilters = useCallback(() => {
+    setShowFilters(false);
+    fetchJobs(1, 'initial');
+  }, [fetchJobs]);
 
   const handleLoadMore = () => {
     if (!isLoading && !isRefreshing && !isLoadingMore && hasMore) {
@@ -465,32 +504,78 @@ const JobList: React.FC = () => {
 
                   <View style={styles.cardMain}>
                     <View style={styles.titleRow}>
-                      <Text style={styles.jobTitle} numberOfLines={1}>{item.title}</Text>
+                      <View style={{ flex: 1 }}>
+                        {!!item.jobNumber && (
+                          <Text style={styles.jobNumberText}>#{item.jobNumber}</Text>
+                        )}
+
+                      </View>
                       <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
+                        {item.status === 'In Progress' && (
+                          <RefreshCw size={12} color={statusStyle.text} style={{ marginRight: 4 }} />
+                        )}
+                        {item.status === 'Scheduled' && (
+                          <Clock size={12} color={statusStyle.text} style={{ marginRight: 4 }} />
+                        )}
+                        {item.status === 'Completed' && (
+                          <CheckCircle size={12} color={statusStyle.text} style={{ marginRight: 4 }} />
+                        )}
+                        {item.status === 'Cancelled' && (
+                          <XCircle size={12} color={statusStyle.text} style={{ marginRight: 4 }} />
+                        )}
                         <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status}</Text>
                       </View>
                     </View>
+                    <Text style={styles.jobTitle} numberOfLines={1}>{item.title}</Text>
+                  </View>
+                </View>
 
-                    <View style={styles.customerRow}>
-                      <User size={14} color="#64748b" />
-                      <Text style={styles.customerName} numberOfLines={1}>{item.customer}</Text>
+                <View style={styles.infoContainer}>
+                  <View style={styles.infoItem}>
+                    <User size={14} color="#64748b" />
+                    <Text style={styles.infoText}>{item.customer}</Text>
+                  </View>
+                  <View style={styles.infoItem}>
+                    <Clock size={14} color="#64748b" />
+                    <Text style={styles.infoText}>{item.timeLabel}</Text>
+                  </View>
+                  <View style={[styles.infoItem, { justifyContent: 'space-between', alignItems: 'center' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, paddingRight: 12 }}>
+                      <MapPin size={14} color="#64748b" />
+                      <Text style={[styles.infoText, { flexShrink: 1 }]} numberOfLines={1} ellipsizeMode="tail">
+                        {item.address}
+                      </Text>
                     </View>
-
-                    <View style={styles.timeRow}>
-                      <Clock size={14} color="#64748b" />
-                      <Text style={styles.timeText}>{item.timeLabel}</Text>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.navigateBtn}
+                      onPress={() => handleNavigate(item.address)}
+                      activeOpacity={0.7}
+                    >
+                      <Navigation size={14} color="#2563eb" />
+                      <Text style={styles.navigateBtnText}>Directions</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
                 <View style={styles.cardDivider} />
 
                 <View style={styles.cardFooter}>
-                  <View style={styles.typeBadge}>
-                    <Briefcase size={12} color="#64748b" />
-                    <Text style={styles.typeText}>{item.typeLabel}</Text>
+                  <View style={styles.badgeRow}>
+                    <View style={styles.typeBadge}>
+                      <Briefcase size={12} color="#64748b" />
+                      <Text style={styles.typeText}>{item.typeLabel}</Text>
+                    </View>
+                    {item.priority === 'High' && (
+                      <View style={styles.priorityBadge}>
+                        <AlertCircle size={12} color="#ef4444" />
+                        <Text style={styles.priorityText}>High</Text>
+                      </View>
+                    )}
                   </View>
-                  <ChevronRight size={18} color="#cbd5e1" />
+                  <View style={styles.viewDetailsBtn}>
+                    <Text style={styles.viewDetailsText}>View Details</Text>
+                    <ChevronRight size={16} color="#2563eb" />
+                  </View>
                 </View>
               </TouchableOpacity>
             );
@@ -709,35 +794,38 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16, paddingBottom: 120, gap: 16, flexGrow: 1, paddingTop: 10 },
 
   jobCard: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'white',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 16,
-    shadowColor: '#64748b',
+    shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
     elevation: 3,
   },
   cardHeader: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   dateBlock: {
-    width: 56,
+    width: 52,
     height: 56,
-    borderRadius: 16,
-    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    backgroundColor: '#eff6ff',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#dbeafe',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateMonth: { fontSize: 11, fontWeight: '800', color: '#2563eb', textTransform: 'uppercase' },
-  dateDay: { fontSize: 20, fontWeight: '900', color: '#0f172a', marginTop: -2 },
+  dateMonth: { fontSize: 11, fontWeight: '800', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dateDay: { fontSize: 22, fontWeight: '900', color: '#1e3a8a', marginTop: -2 },
 
-  cardMain: { flex: 1, gap: 6 },
+  cardMain: { flex: 1, gap: 4 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
-  jobTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: '#0f172a', lineHeight: 22 },
+  jobNumberText: { fontSize: 12, fontWeight: '700', color: '#94a3b8', marginTop: 7 },
+  jobTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 7 },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 8,
@@ -745,27 +833,66 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  customerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  customerName: { fontSize: 14, fontWeight: '600', color: '#475569', flex: 1 },
+  infoContainer: {
+    marginTop: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  infoItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoText: { fontSize: 14, fontWeight: '500', color: '#64748b' },
 
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  timeText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  navigateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  navigateBtnText: { fontSize: 12, fontWeight: '700', color: '#0f172a' },
 
   cardDivider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 14 },
 
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: '#f8fafc',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
   },
-  typeText: { fontSize: 12, fontWeight: '700', color: '#475569', textTransform: 'uppercase' },
+  typeText: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' },
+  priorityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  priorityText: { fontSize: 11, fontWeight: '700', color: '#ef4444', textTransform: 'uppercase' },
+  viewDetailsBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  viewDetailsText: { fontSize: 13, fontWeight: '700', color: '#2563eb' },
 
   emptyState: { paddingHorizontal: 24, paddingTop: 60, alignItems: 'center' },
   emptyIconBox: {

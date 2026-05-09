@@ -17,13 +17,6 @@ const JobsViewSwitcher: React.FC<JobsViewSwitcherProps> = ({ activeView }) => {
 
   return (
     <View style={styles.container}>
-      <View
-        style={[
-          styles.activeTrack,
-          activeView === 'schedule' ? styles.activeTrackLeft : styles.activeTrackRight,
-        ]}
-      />
-
       <TouchableOpacity
         style={[styles.segment, activeView === 'schedule' && styles.segmentActive]}
         activeOpacity={0.9}
@@ -37,7 +30,7 @@ const JobsViewSwitcher: React.FC<JobsViewSwitcherProps> = ({ activeView }) => {
         activeOpacity={0.9}
         onPress={() => navigateToView('list')}
       >
-        <Text style={[styles.segmentText, activeView === 'list' && styles.segmentTextActive]}>List</Text>
+        <Text style={[styles.segmentText, activeView === 'list' && styles.segmentTextActive]}>Joblist</Text>
       </TouchableOpacity>
     </View>
   );
@@ -46,54 +39,34 @@ const JobsViewSwitcher: React.FC<JobsViewSwitcherProps> = ({ activeView }) => {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-    backgroundColor: '#eef2ff',
-    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 20,
     padding: 4,
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  activeTrack: {
-    position: 'absolute',
-    top: 4,
-    bottom: 4,
-    width: '50%',
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    shadowColor: '#1d4ed8',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  activeTrackLeft: {
-    left: 4,
-  },
-  activeTrackRight: {
-    right: 4,
   },
   segment: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    zIndex: 1,
   },
   segmentActive: {
-    transform: [{ scale: 1 }],
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
   segmentText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '600',
     color: '#64748b',
   },
   segmentTextActive: {
-    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563eb', // blue-600
   },
 });
 
