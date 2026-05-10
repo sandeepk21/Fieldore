@@ -2,29 +2,27 @@ import { router } from 'expo-router';
 import {
   Bell,
   FileText,
+  Mail,
   Plus,
   Search,
   SlidersHorizontal,
-  MoreHorizontal,
-  Mail,
-  Trash2,
+  Trash2
 } from 'lucide-react-native';
-import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Animated,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Animated,
-  Platform,
+  View
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { InvoiceResponse } from '@/src/api/generated';
 import SideFilterSheet from '@/src/components/SideFilterSheet';
@@ -66,10 +64,17 @@ const formatDisplayDate = (value?: string | null) => {
   }).format(date);
 };
 
-const getInvoiceTitle = (invoice: InvoiceResponse) =>
-  invoice.customer?.displayName?.trim() ||
-  invoice.customerNameSnapshot?.trim() ||
-  'Unnamed customer';
+const capitalizeWords = (str: string) => {
+  if (!str) return str;
+  return str.replace(/\b\w/g, char => char.toUpperCase());
+};
+
+const getInvoiceTitle = (invoice: InvoiceResponse) => {
+  const title = invoice.customer?.displayName?.trim() ||
+    invoice.customerNameSnapshot?.trim() ||
+    'Unnamed customer';
+  return capitalizeWords(title);
+};
 
 const getInvoiceNumber = (invoice: InvoiceResponse) =>
   invoice.invoiceNumber?.trim() || invoice.id || 'Invoice';
@@ -149,7 +154,7 @@ const SkeletonCard = () => {
   return (
     <Animated.View style={[styles.invoiceCard, { opacity: animValue }]}>
       <View style={styles.invoiceHeader}>
-        <View style={[styles.skeletonBlock, { width: 42, height: 42, borderRadius: 12 }]} />
+        <View style={[styles.skeletonBlock, { width: 48, height: 48, borderRadius: 14 }]} />
         <View style={[styles.invoiceInfo, { gap: 6 }]}>
           <View style={[styles.skeletonBlock, { width: '60%', height: 16, borderRadius: 4 }]} />
           <View style={[styles.skeletonBlock, { width: '40%', height: 12, borderRadius: 4 }]} />
@@ -191,44 +196,41 @@ const InvoiceListItem = ({ invoice, onPress }: { invoice: InvoiceResponse; onPre
   return (
     <Swipeable renderRightActions={renderRightActions} overshootRight={false} containerStyle={styles.swipeableContainer}>
       <TouchableOpacity style={styles.invoiceCard} onPress={() => onPress(invoice.id)} activeOpacity={0.7}>
-        <View style={styles.invoiceHeader}>
-          <View style={styles.customerAvatar}>
-            <Text style={styles.customerAvatarText}>{title.charAt(0).toUpperCase()}</Text>
+        <View style={styles.invoiceCardTop}>
+          <View style={styles.invoiceIconWrap}>
+            <FileText size={22} color="#2563eb" />
           </View>
-          <View style={styles.invoiceInfo}>
-            <Text style={styles.customerName} numberOfLines={1}>{title}</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.invoiceNumber}>{number}</Text>
-              {invoice.jobId && (
-                <>
-                  <View style={styles.metaDot} />
-                  <Text style={styles.jobRef}>Job Linked</Text>
-                </>
-              )}
-            </View>
+          <View style={styles.invoiceInfoLeft}>
+             <Text style={styles.customerName} numberOfLines={1}>{title}</Text>
+             <View style={styles.metaRow}>
+               <Text style={styles.invoiceNumber}>{number}</Text>
+               {invoice.jobId && (
+                 <>
+                   <View style={styles.metaDot} />
+                   <Text style={styles.jobRef}>Linked Job</Text>
+                 </>
+               )}
+             </View>
           </View>
+          <View style={styles.invoiceInfoRight}>
+             <Text style={styles.footerAmount}>{formatInvoiceCurrency(invoice.totalAmount)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.invoiceCardBottom}>
           <View style={[styles.statusBadge, { backgroundColor: tone.bg }]}>
+            <View style={[styles.statusDot, { backgroundColor: tone.text }]} />
             <Text style={[styles.statusText, { color: tone.text }]}>
               {formatInvoiceStatusLabel(invoice.status)}
             </Text>
           </View>
-        </View>
 
-        <View style={styles.invoiceFooter}>
-          <View style={styles.footerCol}>
-            <Text style={styles.footerLabel}>Amount</Text>
-            <Text style={styles.footerAmount}>{formatInvoiceCurrency(invoice.totalAmount)}</Text>
-          </View>
-          <View style={[styles.footerCol, { alignItems: 'flex-end' }]}>
-            <Text style={styles.footerLabel}>Due Date</Text>
-            <View style={styles.dueDateRow}>
-              <Text style={[styles.footerDate, isOverdue && styles.overdueText]}>
-                {formatDisplayDate(invoice.dueOn)}
-              </Text>
-              {isOverdue && (
-                <View style={styles.overdueIndicator} />
-              )}
-            </View>
+          <View style={styles.dueDateRow}>
+            <Text style={styles.footerLabel}>Due </Text>
+            <Text style={[styles.footerDate, isOverdue && styles.overdueText]}>
+              {formatDisplayDate(invoice.dueOn)}
+            </Text>
+            {isOverdue && <View style={styles.overdueIndicator} />}
           </View>
         </View>
       </TouchableOpacity>
@@ -297,7 +299,7 @@ const InvoicesScreen: React.FC = () => {
     invoices.forEach(inv => {
       const amt = inv.totalAmount || 0;
       const status = (inv.status || '').toLowerCase();
-      
+
       if (status !== 'paid' && status !== 'cancelled') {
         totalUnpaid += amt;
       }
@@ -312,10 +314,10 @@ const InvoicesScreen: React.FC = () => {
       if (status === 'overdue') {
         overdueAmount += amt;
       } else if (status !== 'paid' && status !== 'cancelled' && inv.dueOn) {
-         const due = new Date(inv.dueOn);
-         if (due < now) {
-            overdueAmount += amt;
-         }
+        const due = new Date(inv.dueOn);
+        if (due < now) {
+          overdueAmount += amt;
+        }
       }
 
       if (['draft', 'sent', 'viewed', 'partially paid'].includes(status)) {
@@ -377,219 +379,226 @@ const InvoicesScreen: React.FC = () => {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.topHeader}>
-        <View>
-          <Text style={styles.pageTitle}>Invoices</Text>
-          <Text style={styles.businessSummary}>Fieldore Services LLC</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}>
-            <Bell size={20} color="#64748b" />
-          </TouchableOpacity>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>F</Text>
+        <View style={styles.topHeader}>
+          <View>
+            <Text style={styles.pageTitle}>Invoices</Text>
+            <Text style={styles.businessSummary}>Fieldore Services LLC</Text>
           </View>
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.mainScroll}
-        contentContainerStyle={styles.mainScrollContent}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[1]}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => loadInvoices(true)} tintColor="#2563eb" />}
-      >
-        {/* Index 0: Analytics Section */}
-        <View style={styles.analyticsSection}>
-          <View style={styles.analyticsGrid}>
-            <View style={styles.analyticCard}>
-              <Text style={styles.analyticLabel}>Total Unpaid</Text>
-              <Text style={styles.analyticValue}>{formatInvoiceCurrency(stats.totalUnpaid)}</Text>
-            </View>
-            <View style={styles.analyticCard}>
-              <Text style={styles.analyticLabel}>Overdue</Text>
-              <Text style={[styles.analyticValue, stats.overdueAmount > 0 && { color: '#ef4444' }]}>
-                {formatInvoiceCurrency(stats.overdueAmount)}
-              </Text>
-            </View>
-            <View style={styles.analyticCard}>
-              <Text style={styles.analyticLabel}>Paid This Month</Text>
-              <Text style={styles.analyticValue}>{formatInvoiceCurrency(stats.paidThisMonth)}</Text>
-            </View>
-            <View style={styles.analyticCard}>
-              <Text style={styles.analyticLabel}>Pending Invoices</Text>
-              <Text style={styles.analyticValue}>{stats.pendingCount}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Index 1: Sticky Search & Filters */}
-        <View style={styles.stickyHeaderContainer}>
-          <View style={styles.searchRow}>
-            <View style={styles.searchBox}>
-              <Search size={18} color="#94a3b8" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search invoices, customers..."
-                placeholderTextColor="#94a3b8"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-            <TouchableOpacity
-              style={[styles.filterButton, showFilters && styles.filterButtonActive]}
-              onPress={() => setShowFilters(true)}
-              activeOpacity={0.7}
-            >
-              <SlidersHorizontal size={18} color={showFilters ? '#ffffff' : '#64748b'} />
-              {activeFilterCount > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                </View>
-              )}
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.iconButton}>
+              <Bell size={20} color="#64748b" />
             </TouchableOpacity>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>F</Text>
+            </View>
           </View>
-          
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.statusRow}
-            style={styles.statusScroller}
-          >
-            {STATUS_OPTIONS.map(status => (
+        </View>
+
+        <ScrollView
+          style={styles.mainScroll}
+          contentContainerStyle={styles.mainScrollContent}
+          showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={[1]}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => loadInvoices(true)} tintColor="#2563eb" />}
+        >
+          {/* Index 0: Analytics Section */}
+          <View style={styles.analyticsSection}>
+            <LinearGradient 
+              colors={['#0f172a', '#1e293b']} 
+              start={{ x: 0, y: 0 }} 
+              end={{ x: 1, y: 1 }} 
+              style={styles.heroAnalyticCard}
+            >
+              <View style={styles.heroTop}>
+                <Text style={styles.heroAnalyticLabel}>Total Unpaid</Text>
+                <View style={styles.heroBadge}>
+                  <Text style={styles.heroBadgeText}>{stats.pendingCount} Pending</Text>
+                </View>
+              </View>
+              <Text style={styles.heroAnalyticValue}>{formatInvoiceCurrency(stats.totalUnpaid)}</Text>
+            </LinearGradient>
+
+            <View style={styles.analyticsGrid}>
+              <View style={styles.analyticCard}>
+                <Text style={styles.analyticLabel}>Overdue</Text>
+                <Text style={[styles.analyticValue, stats.overdueAmount > 0 && { color: '#ef4444' }]}>
+                  {formatInvoiceCurrency(stats.overdueAmount)}
+                </Text>
+              </View>
+              <View style={styles.analyticCard}>
+                <Text style={styles.analyticLabel}>Paid This Month</Text>
+                <Text style={styles.analyticValue}>{formatInvoiceCurrency(stats.paidThisMonth)}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Index 1: Sticky Search & Filters */}
+          <View style={styles.stickyHeaderContainer}>
+            <View style={styles.searchRow}>
+              <View style={styles.searchBox}>
+                <Search size={18} color="#94a3b8" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search invoices, customers..."
+                  placeholderTextColor="#94a3b8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
               <TouchableOpacity
-                key={status}
-                style={[styles.statusChip, filters.status === status && styles.statusChipActive]}
-                onPress={() => updateFilter('status', status)}
+                style={[styles.filterButton, showFilters && styles.filterButtonActive]}
+                onPress={() => setShowFilters(true)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.statusChipText, filters.status === status && styles.statusChipTextActive]}>
-                  {status}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Index 2: List Content */}
-        <View style={styles.listContent}>
-          {isLoading && invoices.length === 0 ? (
-            <View style={styles.skeletonContainer}>
-              {[1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
-            </View>
-          ) : error ? (
-            <View style={styles.stateContainer}>
-              <Text style={styles.stateTitle}>Unable to load invoices</Text>
-              <Text style={styles.stateText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => loadInvoices()}>
-                <Text style={styles.retryButtonText}>Try Again</Text>
+                <SlidersHorizontal size={18} color={showFilters ? '#ffffff' : '#64748b'} />
+                {activeFilterCount > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
-          ) : invoices.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <View style={styles.emptyIconWrap}>
-                <FileText size={40} color="#2563eb" strokeWidth={1.5} />
-              </View>
-              <Text style={styles.emptyTitle}>No invoices found</Text>
-              <Text style={styles.emptyText}>
-                {searchQuery.trim() || activeFilterCount > 0 || filters.status !== 'All'
-                  ? 'Try a different search or adjust the filters to find what you are looking for.'
-                  : 'Create your first invoice to start getting paid.'}
-              </Text>
-            </View>
-          ) : (
-            invoices.map(invoice => (
-              <InvoiceListItem key={invoice.id || invoice.invoiceNumber} invoice={invoice} onPress={openInvoice} />
-            ))
-          )}
-        </View>
-      </ScrollView>
 
-      <SideFilterSheet
-        visible={showFilters}
-        title="Date Filters"
-        subtitle="Filter invoices by their issued date."
-        badgeCount={activeFilterCount}
-        onClose={() => setShowFilters(false)}
-        onClear={activeFilterCount > 0 ? clearDateFilters : undefined}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Quick Presets</Text>
-            <View style={styles.presetGrid}>
-              {DATE_PRESET_OPTIONS.map(option => (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.statusRow}
+              style={styles.statusScroller}
+            >
+              {STATUS_OPTIONS.map(status => (
                 <TouchableOpacity
-                  key={option}
-                  style={[styles.presetChip, selectedIssuedPreset === option && styles.presetChipActive]}
-                  onPress={() => applyDatePreset(option)}
+                  key={status}
+                  style={[styles.statusChip, filters.status === status && styles.statusChipActive]}
+                  onPress={() => updateFilter('status', status)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={[styles.presetChipText, selectedIssuedPreset === option && styles.presetChipTextActive]}>
-                    {option}
+                  <Text style={[styles.statusChipText, filters.status === status && styles.statusChipTextActive]}>
+                    {status}
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           </View>
 
-          <View style={styles.filterSection}>
-            <Text style={styles.filterLabel}>Custom Range</Text>
-            <View style={styles.dateColumn}>
-              <TouchableOpacity
-                style={[styles.dateCard, activeDateField === 'issuedFrom' && styles.dateCardActive]}
-                onPress={() => setActiveDateField(current => (current === 'issuedFrom' ? null : 'issuedFrom'))}
-              >
-                <Text style={styles.dateCardLabel}>Issued From</Text>
-                <Text style={styles.dateCardValue}>{formatFilterDateLabel(filters.issuedFrom)}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.dateCard, activeDateField === 'issuedTo' && styles.dateCardActive]}
-                onPress={() => setActiveDateField(current => (current === 'issuedTo' ? null : 'issuedTo'))}
-              >
-                <Text style={styles.dateCardLabel}>Issued To</Text>
-                <Text style={styles.dateCardValue}>{formatFilterDateLabel(filters.issuedTo)}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {activeDateField && (
-            <View style={styles.calendarCard}>
-              <View style={styles.calendarHeader}>
-                <View>
-                  <Text style={styles.calendarTitle}>
-                    {activeDateField === 'issuedFrom' ? 'Select Issued From' : 'Select Issued To'}
-                  </Text>
-                </View>
-                {filters[activeDateField] ? (
-                  <TouchableOpacity onPress={() => handleDatePick(activeDateField, '')}>
-                    <Text style={styles.clearDateText}>Clear</Text>
-                  </TouchableOpacity>
-                ) : null}
+          {/* Index 2: List Content */}
+          <View style={styles.listContent}>
+            {isLoading && invoices.length === 0 ? (
+              <View style={styles.skeletonContainer}>
+                {[1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} />)}
               </View>
-
-              <Calendar
-                markedDates={markedDates}
-                onDayPress={day => handleDatePick(activeDateField, day.dateString)}
-                theme={{
-                  backgroundColor: '#ffffff',
-                  calendarBackground: '#ffffff',
-                  todayTextColor: '#2563eb',
-                  arrowColor: '#2563eb',
-                  selectedDayBackgroundColor: '#2563eb',
-                  selectedDayTextColor: '#ffffff',
-                  textDayFontWeight: '500',
-                  textMonthFontWeight: '700',
-                  textDayHeaderFontWeight: '600',
-                }}
-              />
-            </View>
-          )}
+            ) : error ? (
+              <View style={styles.stateContainer}>
+                <Text style={styles.stateTitle}>Unable to load invoices</Text>
+                <Text style={styles.stateText}>{error}</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={() => loadInvoices()}>
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : invoices.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <View style={styles.emptyIconWrap}>
+                  <FileText size={40} color="#2563eb" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.emptyTitle}>No invoices found</Text>
+                <Text style={styles.emptyText}>
+                  {searchQuery.trim() || activeFilterCount > 0 || filters.status !== 'All'
+                    ? 'Try a different search or adjust the filters to find what you are looking for.'
+                    : 'Create your first invoice to start getting paid.'}
+                </Text>
+              </View>
+            ) : (
+              invoices.map(invoice => (
+                <InvoiceListItem key={invoice.id || invoice.invoiceNumber} invoice={invoice} onPress={openInvoice} />
+              ))
+            )}
+          </View>
         </ScrollView>
-      </SideFilterSheet>
 
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('../Screens/CreateInvoiceScreen')} activeOpacity={0.8}>
-        <Plus size={24} color="#fff" />
-      </TouchableOpacity>
+        <SideFilterSheet
+          visible={showFilters}
+          title="Date Filters"
+          subtitle="Filter invoices by their issued date."
+          badgeCount={activeFilterCount}
+          onClose={() => setShowFilters(false)}
+          onClear={activeFilterCount > 0 ? clearDateFilters : undefined}
+        >
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Quick Presets</Text>
+              <View style={styles.presetGrid}>
+                {DATE_PRESET_OPTIONS.map(option => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.presetChip, selectedIssuedPreset === option && styles.presetChipActive]}
+                    onPress={() => applyDatePreset(option)}
+                  >
+                    <Text style={[styles.presetChipText, selectedIssuedPreset === option && styles.presetChipTextActive]}>
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Custom Range</Text>
+              <View style={styles.dateColumn}>
+                <TouchableOpacity
+                  style={[styles.dateCard, activeDateField === 'issuedFrom' && styles.dateCardActive]}
+                  onPress={() => setActiveDateField(current => (current === 'issuedFrom' ? null : 'issuedFrom'))}
+                >
+                  <Text style={styles.dateCardLabel}>Issued From</Text>
+                  <Text style={styles.dateCardValue}>{formatFilterDateLabel(filters.issuedFrom)}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.dateCard, activeDateField === 'issuedTo' && styles.dateCardActive]}
+                  onPress={() => setActiveDateField(current => (current === 'issuedTo' ? null : 'issuedTo'))}
+                >
+                  <Text style={styles.dateCardLabel}>Issued To</Text>
+                  <Text style={styles.dateCardValue}>{formatFilterDateLabel(filters.issuedTo)}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {activeDateField && (
+              <View style={styles.calendarCard}>
+                <View style={styles.calendarHeader}>
+                  <View>
+                    <Text style={styles.calendarTitle}>
+                      {activeDateField === 'issuedFrom' ? 'Select Issued From' : 'Select Issued To'}
+                    </Text>
+                  </View>
+                  {filters[activeDateField] ? (
+                    <TouchableOpacity onPress={() => handleDatePick(activeDateField, '')}>
+                      <Text style={styles.clearDateText}>Clear</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <Calendar
+                  markedDates={markedDates}
+                  onDayPress={day => handleDatePick(activeDateField, day.dateString)}
+                  theme={{
+                    backgroundColor: '#ffffff',
+                    calendarBackground: '#ffffff',
+                    todayTextColor: '#2563eb',
+                    arrowColor: '#2563eb',
+                    selectedDayBackgroundColor: '#2563eb',
+                    selectedDayTextColor: '#ffffff',
+                    textDayFontWeight: '500',
+                    textMonthFontWeight: '700',
+                    textDayHeaderFontWeight: '600',
+                  }}
+                />
+              </View>
+            )}
+          </ScrollView>
+        </SideFilterSheet>
+
+        <TouchableOpacity style={styles.fab} onPress={() => router.push('../Screens/CreateInvoiceScreen')} activeOpacity={0.8}>
+          <Plus size={24} color="#fff" />
+        </TouchableOpacity>
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -597,7 +606,7 @@ const InvoicesScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
-  
+
   // Header
   topHeader: {
     flexDirection: 'row',
@@ -608,8 +617,8 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     backgroundColor: '#ffffff',
   },
-  pageTitle: { fontSize: 32, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 },
-  businessSummary: { marginTop: 4, fontSize: 14, color: '#64748b', fontWeight: '600' },
+  pageTitle: { fontSize: 28, fontWeight: '800', color: '#0f172a', letterSpacing: -0.5 },
+  businessSummary: { marginTop: 4, fontSize: 13, color: '#64748b', fontWeight: '600' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconButton: {
     width: 40, height: 40, borderRadius: 20,
@@ -628,28 +637,32 @@ const styles = StyleSheet.create({
   mainScroll: { flex: 1 },
   mainScrollContent: { paddingBottom: 120 },
 
-  // Analytics Section
+  // Analytics
   analyticsSection: { paddingHorizontal: 20, paddingBottom: 24 },
-  analyticsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  heroAnalyticCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#0f172a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 4,
   },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  heroAnalyticLabel: { fontSize: 13, fontWeight: '600', color: '#cbd5e1' },
+  heroBadge: { backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  heroBadgeText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
+  heroAnalyticValue: { fontSize: 28, fontWeight: '800', color: '#ffffff', letterSpacing: -0.5 },
+
+  analyticsGrid: { flexDirection: 'row', gap: 12 },
   analyticCard: {
-    width: '48%',
+    flex: 1,
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
-    elevation: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.02, shadowRadius: 8, elevation: 1,
   },
   analyticLabel: { fontSize: 12, fontWeight: '600', color: '#64748b', marginBottom: 8 },
-  analyticValue: { fontSize: 20, fontWeight: '800', color: '#0f172a', letterSpacing: -0.5 },
+  analyticValue: { fontSize: 18, fontWeight: '700', color: '#0f172a', letterSpacing: -0.5 },
 
   // Sticky Header (Search + Filters)
   stickyHeaderContainer: {
@@ -659,7 +672,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
     zIndex: 10,
   },
-  searchRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 12, marginBottom: 16 },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
@@ -690,7 +703,7 @@ const styles = StyleSheet.create({
   },
   filterBadgeText: { color: '#ffffff', fontSize: 10, fontWeight: '800' },
 
-  statusScroller: { marginTop: 16 },
+  statusScroller: { paddingHorizontal: 20 },
   statusRow: { paddingHorizontal: 20, gap: 8, paddingRight: 40 },
   statusChip: {
     paddingHorizontal: 16, paddingVertical: 8,
@@ -704,65 +717,65 @@ const styles = StyleSheet.create({
 
   // List Content
   listContent: { paddingHorizontal: 20, paddingTop: 16 },
-  
+
   // Swipeable & Cards
   swipeableContainer: { marginBottom: 12, borderRadius: 16 },
   swipeActionsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
     paddingLeft: 12,
   },
   swipeAction: {
-    width: 72,
+    width: 70,
     height: '100%',
-    borderRadius: 16,
-    justifyContent: 'center',
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 8,
   },
-  swipeActionText: { color: '#fff', fontSize: 12, fontWeight: '700', marginTop: 4 },
+  swipeActionText: { color: '#fff', fontSize: 11, fontWeight: '700', marginTop: 4 },
 
   invoiceCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 12,
-    elevation: 2,
+    borderColor: '#e2e8f0',
+    shadowColor: '#64748b', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 1,
   },
-  invoiceHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  customerAvatar: {
-    width: 42, height: 42, borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1, borderColor: '#f1f5f9',
+  invoiceCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  invoiceIconWrap: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1, borderColor: '#dbeafe',
     alignItems: 'center', justifyContent: 'center',
+    marginRight: 12,
   },
-  customerAvatarText: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
-  invoiceInfo: { flex: 1 },
-  customerName: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 4 },
+  invoiceInfoLeft: { flex: 1, paddingRight: 16 },
+  customerName: { fontSize: 16, fontWeight: '700', color: '#0f172a', marginBottom: 4, letterSpacing: -0.2 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   invoiceNumber: { fontSize: 13, color: '#64748b', fontWeight: '500' },
   metaDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#cbd5e1' },
   jobRef: { fontSize: 12, color: '#94a3b8', fontWeight: '600' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  statusText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  invoiceFooter: {
+  
+  invoiceInfoRight: { alignItems: 'flex-end' },
+  footerAmount: { fontSize: 18, fontWeight: '800', color: '#0f172a', letterSpacing: -0.5 },
+  
+  invoiceCardBottom: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginTop: 16, paddingTop: 16,
     borderTopWidth: 1, borderTopColor: '#f1f5f9',
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  footerCol: { flex: 1 },
-  footerLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
-  footerAmount: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
-  dueDateRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, flexDirection: 'row', alignItems: 'center' },
+  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
+  statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  dueDateRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  footerLabel: { fontSize: 11, color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' },
   footerDate: { fontSize: 14, fontWeight: '600', color: '#475569' },
   overdueText: { color: '#ef4444' },
-  overdueIndicator: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#ef4444' },
+  overdueIndicator: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#ef4444', marginLeft: 2 },
 
   // Skeletons
   skeletonContainer: { gap: 12 },

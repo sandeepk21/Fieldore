@@ -49,7 +49,7 @@ const api = getFieldoreAPI();
 const PAGE_SIZE = 10;
 const STATUS_FILTERS: StatusFilter[] = ['All', 'Active', 'Inactive'];
 const TYPE_FILTERS: TypeFilter[] = ['All', 'Residential', 'Commercial'];
-const AVATAR_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#4f46e5', '#ef4444', '#06b6d4'];
+const AVATAR_COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#1d4ed8', '#1e40af', '#0ea5e9'];
 
 const formatDate = (value?: string) => {
   if (!value) return 'N/A';
@@ -77,16 +77,23 @@ const getAvatarColor = (seed: string) => {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 };
 
+const capitalizeWords = (str: string) => {
+  if (!str) return str;
+  return str.replace(/\b\w/g, char => char.toUpperCase());
+};
+
 const mapCustomerToCard = (customer: CustomerResponse): CustomerCardModel => {
   const primaryAddress =
     customer.addresses?.find(address => address?.isPrimary) ||
     customer.addresses?.find(Boolean);
 
-  const displayName =
+  const rawDisplayName =
     customer.displayName?.trim() ||
     [customer.firstName, customer.lastName].filter(Boolean).join(' ').trim() ||
     customer.companyName?.trim() ||
     'Unnamed Customer';
+
+  const displayName = capitalizeWords(rawDisplayName);
 
   const locationParts = [
     primaryAddress?.city?.trim(),
@@ -118,7 +125,7 @@ const CustomerCard: React.FC<{ customer: CustomerCardModel }> = ({ customer }) =
     }}
   >
     <View style={styles.cardHeader}>
-      <View style={[styles.avatar, { backgroundColor: customer.color }]}>
+      <View style={styles.avatar}>
         <Text style={styles.avatarText}>{customer.initials}</Text>
       </View>
       <View style={styles.headerInfo}>
@@ -186,7 +193,7 @@ const SkeletonBlock = ({
 const CustomerCardSkeleton = () => (
   <View style={styles.card}>
     <View style={styles.cardHeader}>
-      <SkeletonBlock height={56} width={56} style={{ borderRadius: 20 }} />
+      <SkeletonBlock height={48} width={48} style={{ borderRadius: 14 }} />
       <View style={styles.headerInfo}>
         <View style={styles.nameRow}>
           <SkeletonBlock height={20} width="60%" />
@@ -523,8 +530,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#ffffff' },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
-  titleText: { fontSize: 32, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 },
-  countText: { fontSize: 14, fontWeight: '600', color: '#64748b', marginTop: 4 },
+  titleText: { fontSize: 28, fontWeight: '800', color: '#0f172a', letterSpacing: -0.5 },
+  countText: { fontSize: 13, fontWeight: '600', color: '#64748b', marginTop: 4 },
   moreBtn: {
     width: 44,
     height: 44,
@@ -548,7 +555,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   searchIcon: { marginRight: 12 },
-  searchInput: { flex: 1, height: '100%', fontSize: 15, fontWeight: '500', color: '#0f172a' },
+  searchInput: { flex: 1, height: '100%', fontSize: 14, fontWeight: '500', color: '#0f172a' },
   filterBtn: {
     width: 52,
     height: 52,
@@ -575,7 +582,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#ffffff',
   },
-  filterBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
+  filterBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   errorBox: {
     marginTop: 16,
     backgroundColor: '#fef2f2',
@@ -592,33 +599,42 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: '#ffffff',
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    elevation: 3,
     shadowColor: '#64748b',
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  skeletonAvatar: { width: 56, height: 56, borderRadius: 20, backgroundColor: '#e2e8f0' },
-  avatar: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 20, fontWeight: '900', color: 'white', letterSpacing: 0.5 },
+  skeletonAvatar: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#e2e8f0' },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  avatarText: { fontSize: 16, fontWeight: '700', color: '#2563eb', letterSpacing: 0.5 },
   headerInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
   skeletonBadge: { borderRadius: 8 },
-  customerName: { flex: 1, fontSize: 17, fontWeight: '800', color: '#0f172a', lineHeight: 22 },
+  customerName: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0f172a', lineHeight: 22, letterSpacing: -0.2 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  badgeActive: { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' },
+  badgeActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
   badgeIdle: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' },
-  statusText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  textActive: { color: '#059669' },
+  statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  textActive: { color: '#2563eb' },
   textIdle: { color: '#64748b' },
   phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  phoneText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
+  phoneText: { fontSize: 13, fontWeight: '500', color: '#64748b' },
   divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 16 },
   metadataGrid: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
@@ -633,8 +649,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metaLabel: { fontSize: 10, fontWeight: '800', color: '#94a3b8', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
-  metaValue: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  metaLabel: { fontSize: 10, fontWeight: '700', color: '#94a3b8', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  metaValue: { fontSize: 13, fontWeight: '600', color: '#475569' },
   emptyState: {
     flex: 1,
     minHeight: 280,
@@ -658,8 +674,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 24,
   },
-  emptyTitle: { fontSize: 22, fontWeight: '800', color: '#0f172a', marginBottom: 10, textAlign: 'center' },
-  emptyText: { fontSize: 15, fontWeight: '500', color: '#64748b', textAlign: 'center', lineHeight: 22 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', marginBottom: 10, textAlign: 'center' },
+  emptyText: { fontSize: 14, fontWeight: '500', color: '#64748b', textAlign: 'center', lineHeight: 22 },
   footerLoader: { paddingVertical: 18 },
   footerSkeleton: { borderRadius: 999, alignSelf: 'center' },
   endText: { textAlign: 'center', fontSize: 12, fontWeight: '700', color: '#94a3b8', paddingVertical: 18 },
@@ -685,7 +701,7 @@ const styles = StyleSheet.create({
   filterLabel: {
     fontSize: 12,
     color: '#94a3b8',
-    fontWeight: '800',
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 10,
@@ -700,7 +716,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   chipActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
-  chipText: { fontSize: 13, fontWeight: '700', color: '#475569' },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#475569' },
   chipTextActive: { color: '#2563eb' },
   filterInputWrapper: {
     height: 56,
@@ -714,7 +730,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   filterInputIcon: { marginLeft: 2 },
-  filterInput: { flex: 1, height: '100%', fontSize: 15, fontWeight: '500', color: '#0f172a' },
+  filterInput: { flex: 1, height: '100%', fontSize: 14, fontWeight: '500', color: '#0f172a' },
 });
 
 export default Customers;
