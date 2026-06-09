@@ -142,6 +142,11 @@ const normalizeStatusLabel = (status?: string | null) => {
   return status.trim();
 };
 
+const capitalizeWords = (str: string) => {
+  if (!str) return str;
+  return str.replace(/\b\w/g, char => char.toUpperCase());
+};
+
 const mapJobToCalendar = (job: JobResponse): CalendarJob | null => {
   const scheduledStart = parseApiDate(job.scheduledStartAt);
   if (!scheduledStart) return null;
@@ -160,8 +165,8 @@ const mapJobToCalendar = (job: JobResponse): CalendarJob | null => {
     jobNumber: job.jobNumber || '',
     jobType: job.jobType || 'General',
     priority: job.priority || 'Normal',
-    title: getJobDisplayTitle(job),
-    client: getJobCustomerName(job),
+    title: capitalizeWords(getJobDisplayTitle(job)),
+    client: capitalizeWords(getJobCustomerName(job)),
     address,
     status: normalizedStatus,
     time: formatTimeLabel(job.scheduledStartAt, job.scheduledEndAt),
@@ -645,14 +650,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   titleText: {
-    fontSize: 32,
-    fontWeight: '900',
+    fontSize: 28,
+    fontWeight: '800',
     color: '#0f172a',
     letterSpacing: -0.5,
   },
   subtitleText: {
     marginTop: 4,
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748b',
     fontWeight: '600',
   },
@@ -675,7 +680,7 @@ const styles = StyleSheet.create({
   },
   monthHeaderText: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0f172a',
     letterSpacing: -0.5,
   },
@@ -711,7 +716,7 @@ const styles = StyleSheet.create({
   },
   dayOfWeek: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#94a3b8',
     marginBottom: 4,
     letterSpacing: 0.5,
@@ -721,7 +726,7 @@ const styles = StyleSheet.create({
   },
   dayNumber: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#334155',
   },
   dayNumberSelected: {
@@ -757,17 +762,17 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   jobCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowColor: '#64748b',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -783,7 +788,7 @@ const styles = StyleSheet.create({
   },
   timePillText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#0f172a',
   },
   statusPill: {
@@ -798,23 +803,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#fef3c7', // amber-100
   },
   statusPillText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   statusPillTextActive: {
     color: '#d97706', // amber-600
   },
   jobNumberText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#94a3b8',
   },
   jobTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 12,
+    letterSpacing: -0.2,
   },
   infoStack: {
     gap: 8,
@@ -826,7 +834,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   infoText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#64748b',
   },

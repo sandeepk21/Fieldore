@@ -1,29 +1,30 @@
 import {
   CountryLookupResponse,
+  JobResponse,
   StateProvinceLookupResponse,
   getFieldoreAPI,
 } from '@/src/api/generated';
-import { router } from 'expo-router';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   Briefcase,
   Calendar,
   Check,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Clock,
   LucideIcon,
-    MapPin,
-    Plus,
-    Search,
-    StickyNote,
-    Timer,
+  MapPin,
+  Plus,
+  Search,
+  StickyNote,
+  Timer,
   Trash2,
   User,
   X,
 } from 'lucide-react-native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -43,7 +44,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useLoader } from '@/src/context/LoaderContext';
 import { getCustomerDisplayName, getCustomersApi } from '@/src/services/customerService';
-import { createJobApi } from '@/src/services/jobService';
+import { createJobApi, getJobByIdApi, updateJobApi } from '@/src/services/jobService';
 import {
   CreateJobFormData,
   CreateJobFormErrors,
@@ -112,26 +113,12 @@ type ActiveSheet =
   | 'duration'
   | 'serviceCountry'
   | 'serviceState'
+  | 'date'
+  | 'time'
   | null;
-
-type TimeParts = {
-  hour12: number;
-  minute: number;
-  meridiem: 'AM' | 'PM';
-};
-
-const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
-const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, index) => index * 5);
 const api = getFieldoreAPI();
 
 const toTwoDigits = (value: number) => String(value).padStart(2, '0');
-
-const formatMonthLabel = (date: Date) =>
-  new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    year: 'numeric',
-  }).format(date);
 
 const formatDisplayDate = (value: string) => {
   if (!value) return '';
@@ -164,64 +151,124 @@ const formatDisplayTime = (value: string) => {
   }).format(date);
 };
 
-const parseTimeParts = (value: string): TimeParts => {
-  const [hourString, minuteString] = value.split(':');
-  const hour24 = Number(hourString);
-  const minute = Number(minuteString);
-
-  if (!Number.isFinite(hour24) || !Number.isFinite(minute)) {
-    return { hour12: 9, minute: 0, meridiem: 'AM' };
-  }
-
-  const meridiem = hour24 >= 12 ? 'PM' : 'AM';
-  const hour12 = hour24 % 12 || 12;
-
-  return {
-    hour12,
-    minute,
-    meridiem,
-  };
-};
-
-const formatTimeParts = ({ hour12, minute, meridiem }: TimeParts) => {
-  const normalizedHour12 = Math.min(Math.max(hour12, 1), 12);
-  const normalizedMinute = Math.min(Math.max(minute, 0), 59);
-  const hour24 =
-    meridiem === 'PM'
-      ? normalizedHour12 === 12
-        ? 12
-        : normalizedHour12 + 12
-      : normalizedHour12 === 12
-        ? 0
-        : normalizedHour12;
-
-  return `${toTwoDigits(hour24)}:${toTwoDigits(normalizedMinute)}`;
-};
-
-const getCalendarDays = (cursor: Date) => {
-  const startOfMonth = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const endOfMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-  const startDay = startOfMonth.getDay();
-  const totalDays = endOfMonth.getDate();
-  const cells: (Date | null)[] = [];
-
-  for (let index = 0; index < startDay; index += 1) {
-    cells.push(null);
-  }
-
-  for (let day = 1; day <= totalDays; day += 1) {
-    cells.push(new Date(cursor.getFullYear(), cursor.getMonth(), day));
-  }
-
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
-  }
-
-  return cells;
-};
 
 const toIsoDate = (date: Date) =>
   `${date.getFullYear()}-${toTwoDigits(date.getMonth() + 1)}-${toTwoDigits(date.getDate())}`;
+
+const parseIsoDate = (value?: string) => {
+  if (!value) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }
+
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }
+
+  return parsed;
+};
+
+const parseTimeValue = (value?: string, baseDate?: string) => {
+  const date = parseIsoDate(baseDate);
+  const [hourString, minuteString] = (value || '').split(':');
+  const hour = Number(hourString);
+  const minute = Number(minuteString);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    date.setHours(9, 0, 0, 0);
+    return date;
+  }
+
+  date.setHours(hour, minute, 0, 0);
+  return date;
+};
+
+const formatPickerTimeValue = (date: Date) =>
+  `${toTwoDigits(date.getHours())}:${toTwoDigits(date.getMinutes())}`;
+
+const toInputDate = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return `${date.getFullYear()}-${toTwoDigits(date.getMonth() + 1)}-${toTwoDigits(date.getDate())}`;
+};
+
+const toInputTime = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return `${toTwoDigits(date.getHours())}:${toTwoDigits(date.getMinutes())}`;
+};
+
+const buildEditFormData = (job: JobResponse): CreateJobFormData => ({
+  customerId: job.customerId?.trim() || '',
+  title: job.title?.trim() || '',
+  jobType: job.jobType?.trim() || 'Repair',
+  priority: (job.priority?.trim() as CreateJobFormData['priority']) || 'Normal',
+  status: (job.status?.trim() as CreateJobFormData['status']) || 'Scheduled',
+  scheduledDate: toInputDate(job.scheduledStartAt),
+  scheduledTime: toInputTime(job.scheduledStartAt),
+  estimatedDurationMinutes: String(job.estimatedDurationMinutes ?? 120),
+  useCustomerPrimaryAddress: Boolean(job.useCustomerPrimaryAddress),
+  serviceAddress: job.serviceAddress?.line1?.trim() || '',
+  serviceCity: job.serviceAddress?.city?.trim() || '',
+  serviceStateCode: job.serviceAddress?.stateOrProvince?.trim() || '',
+  servicePostalCode: job.serviceAddress?.postalCode?.trim() || '',
+  serviceCountryCode: job.serviceAddress?.country?.trim() || '',
+  description: job.description?.trim() || '',
+  checklist:
+    (job.checklistItems || [])
+      .map(item => item.taskName?.trim() || '')
+      .filter(Boolean)
+      .length > 0
+      ? (job.checklistItems || []).map(item => item.taskName?.trim() || '').filter(Boolean)
+      : ['Initial inspection'],
+});
+
+const buildUpdateJobPayload = (job: JobResponse, data: CreateJobFormData) => {
+  const createPayload = buildCreateJobPayload(data);
+
+  return {
+    customerId: data.customerId,
+    sourceLeadId: job.sourceLeadId || null,
+    title: createPayload.title,
+    jobType: createPayload.jobType,
+    priority: createPayload.priority,
+    status: createPayload.status,
+    scheduledStartAt: createPayload.scheduledStartAt,
+    scheduledEndAt: createPayload.scheduledEndAt,
+    actualStartAt: job.actualStartAt || null,
+    actualEndAt: job.actualEndAt || null,
+    estimatedDurationMinutes: createPayload.estimatedDurationMinutes,
+    useCustomerPrimaryAddress: data.useCustomerPrimaryAddress,
+    serviceAddress: data.useCustomerPrimaryAddress
+      ? undefined
+      : {
+          line1: data.serviceAddress.trim(),
+          line2: job.serviceAddress?.line2 || null,
+          city: data.serviceCity.trim(),
+          stateOrProvince: data.serviceStateCode.trim(),
+          postalCode: data.servicePostalCode.trim(),
+          country: data.serviceCountryCode.trim(),
+          latitude: job.serviceAddress?.latitude ?? null,
+          longitude: job.serviceAddress?.longitude ?? null,
+        },
+    description: createPayload.description,
+    assignments: (job.assignments || [])
+      .filter(item => item.userProfileId)
+      .map(item => ({
+        userProfileId: item.userProfileId || '',
+        isPrimary: Boolean(item.isPrimary),
+      })),
+    checklistItems: createPayload.checklistItems,
+  };
+};
 
 const Section: React.FC<SectionProps> = ({ title, accent, children }) => (
   <View style={styles.sectionCard}>
@@ -403,19 +450,24 @@ const SelectionModal = ({
 );
 
 const CreateJobScreen: React.FC = () => {
+  const params = useLocalSearchParams<{ jobId?: string }>();
+  const editingJobId = typeof params.jobId === 'string' ? params.jobId : '';
+  const isEditMode = Boolean(editingJobId);
   const { showLoader, hideLoader } = useLoader();
   const [formData, setFormData] = useState<CreateJobFormData>(createInitialJobFormData());
   const [errors, setErrors] = useState<CreateJobFormErrors>({});
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
+  const [isLoadingJob, setIsLoadingJob] = useState(isEditMode);
+  const [editingJob, setEditingJob] = useState<JobResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
-  const [isDateSheetVisible, setIsDateSheetVisible] = useState(false);
-  const [isTimeSheetVisible, setIsTimeSheetVisible] = useState(false);
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
   const [isLoadingServiceStates, setIsLoadingServiceStates] = useState(false);
-  const [calendarCursor, setCalendarCursor] = useState(() => new Date());
-  const [timeParts, setTimeParts] = useState<TimeParts>({ hour12: 9, minute: 0, meridiem: 'AM' });
+  const [draftScheduledDate, setDraftScheduledDate] = useState<Date>(() => parseIsoDate());
+  const [draftScheduledTime, setDraftScheduledTime] = useState<Date>(() => parseTimeValue());
+  const originalScheduledDateRef = useRef('');
+  const originalScheduledTimeRef = useRef('');
   const [pendingChecklistItem, setPendingChecklistItem] = useState('');
   const [countries, setCountries] = useState<CountryLookupResponse[]>([]);
   const [serviceStates, setServiceStates] = useState<StateProvinceLookupResponse[]>([]);
@@ -452,6 +504,32 @@ const CreateJobScreen: React.FC = () => {
 
     fetchCustomers();
   }, []);
+
+  useEffect(() => {
+    const loadEditingJob = async () => {
+      if (!isEditMode || !editingJobId) {
+        setIsLoadingJob(false);
+        return;
+      }
+
+      setIsLoadingJob(true);
+
+      try {
+        const job = await getJobByIdApi(editingJobId);
+        setEditingJob(job);
+        setFormData(buildEditFormData(job));
+        setErrors({});
+      } catch (error: any) {
+        setErrors({
+          server: error?.message || 'Failed to load job details.',
+        });
+      } finally {
+        setIsLoadingJob(false);
+      }
+    };
+
+    loadEditingJob();
+  }, [editingJobId, isEditMode]);
 
   useEffect(() => {
     const fetchCountries = async () => {
@@ -553,13 +631,9 @@ const CreateJobScreen: React.FC = () => {
     [formData]
   );
 
-  const calendarDays = useMemo(() => getCalendarDays(calendarCursor), [calendarCursor]);
-
   const closeAllSheets = () => {
     setActiveSheet(null);
     setSelectionSearch('');
-    setIsDateSheetVisible(false);
-    setIsTimeSheetVisible(false);
   };
 
   const closeSelectionModal = useCallback(() => {
@@ -609,31 +683,47 @@ const CreateJobScreen: React.FC = () => {
 
   const openDateSheet = () => {
     closeAllSheets();
-
-    const initialDate = formData.scheduledDate
-      ? new Date(`${formData.scheduledDate}T00:00:00`)
-      : new Date();
-
-    setCalendarCursor(
-      Number.isNaN(initialDate.getTime()) ? new Date() : initialDate
-    );
-    setIsDateSheetVisible(true);
+    originalScheduledDateRef.current = formData.scheduledDate;
+    setDraftScheduledDate(parseIsoDate(formData.scheduledDate));
+    setActiveSheet('date');
   };
 
   const openTimeSheet = () => {
     closeAllSheets();
-    setTimeParts(parseTimeParts(formData.scheduledTime));
-    setIsTimeSheetVisible(true);
+    originalScheduledTimeRef.current = formData.scheduledTime;
+    setDraftScheduledTime(parseTimeValue(formData.scheduledTime, formData.scheduledDate));
+    setActiveSheet('time');
   };
 
-  const handleSelectDate = (date: Date) => {
-    handleFieldChange('scheduledDate', toIsoDate(date));
-    setIsDateSheetVisible(false);
+  const handleConfirmDate = () => {
+    closeAllSheets();
   };
 
   const handleConfirmTime = () => {
-    handleFieldChange('scheduledTime', formatTimeParts(timeParts));
-    setIsTimeSheetVisible(false);
+    closeAllSheets();
+  };
+
+  const applyScheduledDate = useCallback((date: Date) => {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    setDraftScheduledDate(normalizedDate);
+    handleFieldChange('scheduledDate', toIsoDate(normalizedDate));
+  }, [handleFieldChange]);
+
+  const applyScheduledTime = useCallback((date: Date) => {
+    const normalizedTime = new Date(date);
+    setDraftScheduledTime(normalizedTime);
+    handleFieldChange('scheduledTime', formatPickerTimeValue(normalizedTime));
+  }, [handleFieldChange]);
+
+  const handleDatePickerChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (!selectedDate) return;
+    applyScheduledDate(selectedDate);
+  };
+
+  const handleTimePickerChange = (_event: DateTimePickerEvent, selectedTime?: Date) => {
+    if (!selectedTime) return;
+    applyScheduledTime(selectedTime);
   };
 
   const handleSubmit = async () => {
@@ -648,16 +738,26 @@ const CreateJobScreen: React.FC = () => {
     showLoader();
 
     try {
-      const createdJob = await createJobApi(buildCreateJobPayload(formData));
+      if (isEditMode) {
+        if (!editingJobId || !editingJob) {
+          throw new Error('Job details are missing.');
+        }
 
-      Alert.alert('Success', 'Job created successfully.');
-      router.replace({
-        pathname: '../Screens/JobDetailScreen',
-        params: { jobId: createdJob.id || '' },
-      });
+        const updatedJob = await updateJobApi(editingJobId, buildUpdateJobPayload(editingJob, formData));
+        setEditingJob(updatedJob);
+        Alert.alert('Success', 'Job updated successfully.');
+        router.back();
+      } else {
+        const createdJob = await createJobApi(buildCreateJobPayload(formData));
+        Alert.alert('Success', 'Job created successfully.');
+        router.replace({
+          pathname: '../Screens/JobDetailScreen',
+          params: { jobId: createdJob.id || '' },
+        });
+      }
     } catch (error: any) {
       setErrors({
-        server: error?.message || 'Failed to create job. Please try again.',
+        server: error?.message || `Failed to ${isEditMode ? 'update' : 'create'} job. Please try again.`,
       });
     } finally {
       hideLoader();
@@ -795,7 +895,7 @@ const CreateJobScreen: React.FC = () => {
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
           <X size={20} color="#94a3b8" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>CREATE NEW JOB</Text>
+        <Text style={styles.headerTitle}>{isEditMode ? 'UPDATE JOB' : 'CREATE NEW JOB'}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -805,6 +905,13 @@ const CreateJobScreen: React.FC = () => {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          {isLoadingJob ? (
+            <View style={styles.loadingCard}>
+              <ActivityIndicator size="small" color="#2563eb" />
+              <Text style={styles.loadingCardText}>Loading job details...</Text>
+            </View>
+          ) : null}
+
           {!!errors.server && (
             <View style={styles.serverErrorBox}>
               <Text style={styles.serverErrorText}>{errors.server}</Text>
@@ -1067,23 +1174,23 @@ const CreateJobScreen: React.FC = () => {
         </ScrollView>
 
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.createBtn, (!formIsValid || isSubmitting) && styles.createBtnDisabled]}
+            <TouchableOpacity
+            style={[styles.createBtn, (!formIsValid || isSubmitting || isLoadingJob) && styles.createBtnDisabled]}
             activeOpacity={0.9}
             onPress={handleSubmit}
-            disabled={!formIsValid || isSubmitting}
+            disabled={!formIsValid || isSubmitting || isLoadingJob}
           >
             {isSubmitting ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <Text style={styles.createBtnText}>Create Job</Text>
+              <Text style={styles.createBtnText}>{isEditMode ? 'Update Job' : 'Create Job'}</Text>
             )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
       <SelectionModal
-        visible={Boolean(activeSheet && sheetConfig)}
+        visible={Boolean(activeSheet && sheetConfig && activeSheet !== 'date' && activeSheet !== 'time')}
         onClose={closeSelectionModal}
         title={sheetConfig?.title || 'Select'}
         searchPlaceholder={selectionSearchPlaceholder || undefined}
@@ -1093,121 +1200,154 @@ const CreateJobScreen: React.FC = () => {
       />
 
       <BottomSheet
-        visible={isDateSheetVisible}
-        onClose={() => setIsDateSheetVisible(false)}
+        visible={activeSheet === 'date'}
+        onClose={closeAllSheets}
         title="Choose Start Date"
       >
-        <View style={styles.calendarHeader}>
-          <TouchableOpacity style={styles.calendarNavBtn} onPress={() => setCalendarCursor(current => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>
-            <ChevronLeft size={18} color="#334155" />
-          </TouchableOpacity>
-          <Text style={styles.calendarTitle}>{formatMonthLabel(calendarCursor)}</Text>
-          <TouchableOpacity style={styles.calendarNavBtn} onPress={() => setCalendarCursor(current => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>
-            <ChevronRight size={18} color="#334155" />
-          </TouchableOpacity>
+        <View style={styles.pickerBody}>
+          <View style={styles.pickerSummaryCard}>
+            <Text style={styles.pickerSummaryLabel}>Selected date</Text>
+            <Text style={styles.pickerSummaryValue}>{formatDisplayDate(toIsoDate(draftScheduledDate))}</Text>
+          </View>
+
+          <View style={styles.quickOptionRow}>
+            <TouchableOpacity
+              style={styles.quickOptionChip}
+              onPress={() => applyScheduledDate(parseIsoDate())}
+            >
+              <Text style={styles.quickOptionText}>Today</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickOptionChip}
+              onPress={() => {
+                const tomorrow = parseIsoDate();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                applyScheduledDate(tomorrow);
+              }}
+            >
+              <Text style={styles.quickOptionText}>Tomorrow</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickOptionChip}
+              onPress={() => {
+                const nextWeek = parseIsoDate();
+                nextWeek.setDate(nextWeek.getDate() + 7);
+                applyScheduledDate(nextWeek);
+              }}
+            >
+              <Text style={styles.quickOptionText}>Next Week</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.nativePickerCard}>
+            <DateTimePicker
+              mode="date"
+              value={draftScheduledDate}
+              display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+              minimumDate={new Date()}
+              onChange={handleDatePickerChange}
+              accentColor="#2563eb"
+              themeVariant="light"
+            />
+          </View>
         </View>
 
-        <View style={styles.weekdayRow}>
-          {WEEKDAY_LABELS.map(label => (
-            <Text key={label} style={styles.weekdayText}>{label}</Text>
-          ))}
-        </View>
+        <View style={styles.sheetFooter}>
+          <View style={styles.pickerActionRow}>
+            <TouchableOpacity
+              style={styles.timeCancelBtn}
+              onPress={() => {
+                setDraftScheduledDate(parseIsoDate(originalScheduledDateRef.current));
+                handleFieldChange('scheduledDate', originalScheduledDateRef.current);
+                closeAllSheets();
+              }}
+            >
+              <Text style={styles.timeCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
 
-        <View style={styles.calendarGrid}>
-          {calendarDays.map((date, index) => {
-            const isoDate = date ? toIsoDate(date) : '';
-            const isSelected = isoDate === formData.scheduledDate;
-
-            return (
-              <TouchableOpacity
-                key={`${isoDate}-${index}`}
-                style={[styles.calendarCell, isSelected && styles.calendarCellSelected, !date && styles.calendarCellEmpty]}
-                disabled={!date}
-                onPress={() => {
-                  if (date) {
-                    handleSelectDate(date);
-                  }
-                }}
-              >
-                <Text style={[styles.calendarCellText, isSelected && styles.calendarCellTextSelected]}>
-                  {date ? date.getDate() : ''}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+            <TouchableOpacity style={styles.confirmPickerBtn} onPress={handleConfirmDate}>
+              <Text style={styles.confirmPickerBtnText}>Set Date</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </BottomSheet>
 
       <BottomSheet
-        visible={isTimeSheetVisible}
-        onClose={() => setIsTimeSheetVisible(false)}
+        visible={activeSheet === 'time'}
+        onClose={closeAllSheets}
         title="Choose Start Time"
       >
-        <View style={styles.timePreviewCard}>
-          <Text style={styles.timePreviewLabel}>Selected Time</Text>
-          <Text style={styles.timePreviewValue}>
-            {timeParts.hour12}:{toTwoDigits(timeParts.minute)} {timeParts.meridiem}
-          </Text>
-        </View>
-
-        <View style={styles.timeSheetContent}>
-          <View style={styles.timeSelectorColumn}>
-            <Text style={styles.timeSelectorLabel}>Hour</Text>
-            <View style={styles.timeChipWrap}>
-              {HOUR_OPTIONS.map(hour => (
-                <TouchableOpacity
-                  key={hour}
-                  style={[styles.timeChip, timeParts.hour12 === hour && styles.timeChipActive]}
-                  onPress={() => setTimeParts(current => ({ ...current, hour12: hour }))}
-                >
-                  <Text style={[styles.timeChipText, timeParts.hour12 === hour && styles.timeChipTextActive]}>
-                    {hour}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+        <View style={styles.pickerBody}>
+          <View style={styles.timePreviewCard}>
+            <Text style={styles.timePreviewLabel}>Selected Time</Text>
+            <Text style={styles.timePreviewValue}>{formatDisplayTime(formatPickerTimeValue(draftScheduledTime))}</Text>
           </View>
 
-          <View style={styles.timeSelectorColumn}>
-            <Text style={styles.timeSelectorLabel}>Minutes</Text>
-            <View style={styles.timeChipWrap}>
-              {MINUTE_OPTIONS.map(minute => (
-                <TouchableOpacity
-                  key={minute}
-                  style={[styles.timeChip, timeParts.minute === minute && styles.timeChipActive]}
-                  onPress={() => setTimeParts(current => ({ ...current, minute }))}
-                >
-                  <Text style={[styles.timeChipText, timeParts.minute === minute && styles.timeChipTextActive]}>
-                    {toTwoDigits(minute)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.meridiemRow}>
-          {(['AM', 'PM'] as const).map(option => (
+          <View style={styles.quickOptionRow}>
             <TouchableOpacity
-              key={option}
-              style={[styles.meridiemChip, timeParts.meridiem === option && styles.meridiemChipActive]}
-              onPress={() => setTimeParts(current => ({ ...current, meridiem: option }))}
+              style={styles.quickOptionChip}
+              onPress={() => {
+                const morning = parseTimeValue(undefined, formData.scheduledDate);
+                morning.setHours(9, 0, 0, 0);
+                applyScheduledTime(morning);
+              }}
             >
-              <Text style={[styles.meridiemChipText, timeParts.meridiem === option && styles.meridiemChipTextActive]}>
-                {option}
-              </Text>
+              <Text style={styles.quickOptionText}>9:00 AM</Text>
             </TouchableOpacity>
-          ))}
+            <TouchableOpacity
+              style={styles.quickOptionChip}
+              onPress={() => {
+                const noon = parseTimeValue(undefined, formData.scheduledDate);
+                noon.setHours(12, 0, 0, 0);
+                applyScheduledTime(noon);
+              }}
+            >
+              <Text style={styles.quickOptionText}>12:00 PM</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickOptionChip}
+              onPress={() => {
+                const afternoon = parseTimeValue(undefined, formData.scheduledDate);
+                afternoon.setHours(15, 0, 0, 0);
+                applyScheduledTime(afternoon);
+              }}
+            >
+              <Text style={styles.quickOptionText}>3:00 PM</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.nativePickerCard}>
+            <DateTimePicker
+              mode="time"
+              value={draftScheduledTime}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              minuteInterval={5}
+              onChange={handleTimePickerChange}
+              accentColor="#2563eb"
+              themeVariant="light"
+            />
+          </View>
         </View>
 
-        <View style={styles.timeActionRow}>
-          <TouchableOpacity style={styles.timeCancelBtn} onPress={() => setIsTimeSheetVisible(false)}>
-            <Text style={styles.timeCancelBtnText}>Cancel</Text>
-          </TouchableOpacity>
+        <View style={styles.sheetFooter}>
+          <View style={styles.timeActionRow}>
+            <TouchableOpacity
+              style={styles.timeCancelBtn}
+              onPress={() => {
+                setDraftScheduledTime(parseTimeValue(originalScheduledTimeRef.current, formData.scheduledDate));
+                handleFieldChange('scheduledTime', originalScheduledTimeRef.current);
+                closeAllSheets();
+              }}
+            >
+              <Text style={styles.timeCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.confirmPickerBtn} onPress={handleConfirmTime}>
-            <Text style={styles.confirmPickerBtnText}>Set Time</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.confirmPickerBtn} onPress={handleConfirmTime}>
+              <Text style={styles.confirmPickerBtnText}>Set Time</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </BottomSheet>
     </SafeAreaView>
@@ -1244,6 +1384,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 18,
+  },
+  loadingCard: {
+    borderRadius: 18,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingCardText: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '700',
   },
   serverErrorText: { color: '#b91c1c', fontSize: 12, fontWeight: '700', lineHeight: 18 },
   sectionCard: {
@@ -1457,20 +1614,22 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1 },
   sheetSafeArea: {
     justifyContent: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
   },
   sheetCard: {
     backgroundColor: 'white',
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
+    borderRadius: 30,
     paddingHorizontal: 22,
-    paddingBottom: Platform.OS === 'ios' ? 18 : 20,
-    paddingTop: 10,
-    maxHeight: '78%',
+    paddingTop: 12,
+    paddingBottom: 0,
+    maxHeight: '85%',
+    overflow: 'hidden',
     shadowColor: '#0f172a',
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: -6 },
-    elevation: 18,
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 20,
   },
   sheetHandle: {
     alignSelf: 'center',
@@ -1502,6 +1661,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  dateSheetScroll: {
+    flexShrink: 1,
+  },
+  dateSheetContent: {
+    paddingBottom: 12,
+  },
+  pickerBody: {
+    gap: 16,
+    paddingBottom: 18,
+  },
+  sheetFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 14,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 16,
+    backgroundColor: 'white',
+  },
+  quickOptionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quickOptionChip: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  quickOptionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  nativePickerCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    paddingVertical: Platform.OS === 'ios' ? 8 : 0,
+    minHeight: Platform.OS === 'ios' ? 216 : 0,
   },
   sheetOptions: { maxHeight: 380 },
   calendarHeader: {
@@ -1540,12 +1747,41 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   calendarCellEmpty: { opacity: 0 },
+  calendarCellToday: {
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 16,
+    backgroundColor: '#f8fbff',
+  },
   calendarCellSelected: {
     backgroundColor: '#2563eb',
     borderRadius: 16,
+    borderWidth: 0,
   },
   calendarCellText: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
   calendarCellTextSelected: { color: 'white' },
+  pickerSummaryCard: {
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+  pickerSummaryLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  pickerSummaryValue: {
+    marginTop: 6,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
   timePreviewCard: {
     borderRadius: 24,
     backgroundColor: '#f8fafc',
@@ -1606,6 +1842,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
+  pickerActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   timeCancelBtn: {
     flex: 1,
     minHeight: 52,
@@ -1621,6 +1861,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#475569',
   },
+  secondaryPickerBtn: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 18,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryPickerBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#2563eb',
+  },
   confirmPickerBtn: {
     flex: 1,
     minHeight: 52,
@@ -1630,6 +1885,82 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmPickerBtnText: { color: 'white', fontSize: 15, fontWeight: '900' },
+  timePickerScroll: {
+    maxHeight: 280,
+  },
+  monthYearPickerContainer: {
+    paddingTop: 10,
+    paddingBottom: 16,
+  },
+  monthYearPickerRow: {
+    flexDirection: 'row',
+    gap: 16,
+    height: 240,
+  },
+  monthYearPickerCol: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 12,
+  },
+  monthYearPickerTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  monthYearPickerScroll: {
+    flex: 1,
+  },
+  monthYearChip: {
+    width: '100%',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 6,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  monthYearChipActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
+  },
+  monthYearChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  monthYearChipTextActive: {
+    color: '#2563eb',
+  },
+  monthYearConfirmBtn: {
+    height: 50,
+    backgroundColor: '#2563eb',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  monthYearConfirmBtnText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  calendarMonthSelectorBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
 });
 
 export default CreateJobScreen;

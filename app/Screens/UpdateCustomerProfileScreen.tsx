@@ -16,11 +16,13 @@ import {
     Building2,
     Check,
     ChevronDown,
+    ChevronRight,
     Dog,
     LucideIcon,
     Mail,
     MapPin,
     Phone,
+    Search,
     ShieldCheck,
     StickyNote,
     User,
@@ -279,7 +281,7 @@ const mapCustomerToFormData = async (customerId: string) => {
   const sameAsService = customer.billingSameAsService ?? true;
 
   return {
-    customerType: customer.type === 'Commercial' ? 'Commercial' : 'Residential',
+    customerType: (customer.type || '').trim().toLowerCase() === 'commercial' ? 'Commercial' : 'Residential',
     sameAsService,
     formData: {
       companyName: customer.companyName?.trim() || '',
@@ -470,31 +472,78 @@ const TriggerField: React.FC<TriggerFieldProps> = ({
   </View>
 );
 
-const BottomSheet = ({
+interface SheetOption {
+  label: string;
+  value: string;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+const SelectionModal = ({
   visible,
-  onClose,
   title,
-  children,
+  searchPlaceholder,
+  searchValue,
+  onSearchChange,
+  onClose,
+  options,
 }: {
   visible: boolean;
-  onClose: () => void;
   title: string;
-  children: React.ReactNode;
+  searchPlaceholder?: string;
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  onClose: () => void;
+  options: SheetOption[];
 }) => (
-  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-    <View style={styles.modalRoot}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose} />
-      <View style={styles.sheetCard}>
-        <View style={styles.sheetHandle} />
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
-            <X size={18} color="#64748b" />
+  <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <SafeAreaView style={styles.selectionModalOverlay}>
+      <View style={styles.selectionModalContent}>
+        <View style={styles.selectionModalHeader}>
+          <Text style={styles.selectionModalTitle}>{title}</Text>
+          <TouchableOpacity onPress={onClose} style={styles.selectionModalCloseBtn}>
+            <X size={20} color="#0f172a" />
           </TouchableOpacity>
         </View>
-        {children}
+
+        {searchPlaceholder ? (
+          <View style={styles.selectionSearchContainer}>
+            <Search size={18} color="#cbd5e1" style={styles.selectionSearchIcon} />
+            <TextInput
+              style={styles.selectionSearchInput}
+              placeholder={searchPlaceholder}
+              placeholderTextColor="#94a3b8"
+              value={searchValue}
+              onChangeText={onSearchChange}
+            />
+          </View>
+        ) : null}
+
+        <ScrollView style={styles.selectionModalScroll} showsVerticalScrollIndicator={false}>
+          {options.map(option => (
+            <TouchableOpacity
+              key={option.value}
+              style={styles.selectionModalItem}
+              onPress={option.onSelect}
+            >
+              <View style={styles.selectionModalItemContent}>
+                <Text style={styles.selectionModalItemTitle}>{option.label}</Text>
+                <Text style={styles.selectionModalItemSubtitle}>
+                  {option.selected ? 'Selected' : 'Tap to choose'}
+                </Text>
+              </View>
+              {option.selected ? (
+                <View style={styles.selectionModalCheckCircle}>
+                  <Check size={14} color="white" strokeWidth={4} />
+                </View>
+              ) : (
+                <ChevronRight size={18} color="#cbd5e1" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
-    </View>
+    </SafeAreaView>
   </Modal>
 );
 
@@ -505,6 +554,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
   const [customerType, setCustomerType] = useState<CustomerType>('Residential');
   const [sameAsService, setSameAsService] = useState(true);
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>(null);
+  const [selectionSearch, setSelectionSearch] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingScreen, setIsLoadingScreen] = useState(true);
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
@@ -520,6 +570,24 @@ const UpdateCustomerProfileScreen: React.FC = () => {
   const selectedBillingCountry = countries.find(country => country.code === formData.billingCountryCode);
   const selectedServiceState = serviceStates.find(state => (state.code || '') === formData.serviceStateCode);
   const selectedBillingState = billingStates.find(state => (state.code || '') === formData.billingStateCode);
+
+  const closeSelectionModal = useCallback(() => {
+    setActiveSheet(null);
+    setSelectionSearch('');
+  }, []);
+
+  const selectionSearchPlaceholder = useMemo(() => {
+    switch (activeSheet) {
+      case 'serviceCountry':
+      case 'billingCountry':
+        return 'Search country...';
+      case 'serviceState':
+      case 'billingState':
+        return 'Search province...';
+      default:
+        return '';
+    }
+  }, [activeSheet]);
 
   const countryOptions: SelectOption[] = countries
     .map(country => ({
@@ -672,7 +740,14 @@ const UpdateCustomerProfileScreen: React.FC = () => {
   const handleCustomerTypeChange = (type: CustomerType) => {
     setCustomerType(type);
 
-    if (errors.companyName) {
+    if (type === 'Residential') {
+      setFormData(current => ({ ...current, companyName: '' }));
+      setErrors(current => {
+        const next = { ...current };
+        delete next.companyName;
+        return next;
+      });
+    } else if (errors.companyName) {
       const companyError = validateField('companyName', formData.companyName, type, sameAsService);
       setErrors(companyError ? { companyName: companyError } : {});
     }
@@ -680,7 +755,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
 
   const handleToggleSameAsService = (value: boolean) => {
     setSameAsService(value);
-    setActiveSheet(null);
+    closeSelectionModal();
 
     if (value) {
       setErrors(currentErrors => {
@@ -795,7 +870,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
                 serviceStateCode: '',
               }));
               setErrors({});
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -807,7 +882,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
             selected: formData.serviceStateCode === option.value,
             onSelect: () => {
               handleInputChange('serviceStateCode', option.value);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -824,7 +899,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
                 billingStateCode: '',
               }));
               setErrors({});
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -836,7 +911,7 @@ const UpdateCustomerProfileScreen: React.FC = () => {
             selected: formData.billingStateCode === option.value,
             onSelect: () => {
               handleInputChange('billingStateCode', option.value);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
@@ -848,14 +923,23 @@ const UpdateCustomerProfileScreen: React.FC = () => {
             selected: formData.petsNote === option.value,
             onSelect: () => {
               handleInputChange('petsNote', option.value);
-              setActiveSheet(null);
+              closeSelectionModal();
             },
           })),
         };
       default:
         return null;
     }
-  }, [activeSheet, billingStateOptions, countryOptions, formData, handleInputChange, serviceStateOptions]);
+  }, [activeSheet, billingStateOptions, closeSelectionModal, countryOptions, formData, handleInputChange, serviceStateOptions]);
+
+  const filteredSheetOptions = useMemo(() => {
+    const options = sheetConfig?.options || [];
+    const query = selectionSearch.trim().toLowerCase();
+
+    if (!query) return options;
+
+    return options.filter(option => option.label.toLowerCase().includes(query));
+  }, [selectionSearch, sheetConfig]);
 
   if (isLoadingScreen) {
     return <UpdateCustomerProfileSkeleton />;
@@ -954,34 +1038,30 @@ const UpdateCustomerProfileScreen: React.FC = () => {
                 autoCapitalize="none"
               />
 
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <InputField
-                    label="Mobile Phone"
-                    placeholder="(555) 000-0000"
-                    icon={Phone}
-                    keyboardType="phone-pad"
-                    required
-                    value={formData.mobilePhone}
-                    onChangeText={value => handleInputChange('mobilePhone', value)}
-                    error={errors.mobilePhone}
-                    autoCapitalize="none"
-                    maxLength={16}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <InputField
-                    label="Work/Alt Phone"
-                    placeholder="(555) 000-0000"
-                    keyboardType="phone-pad"
-                    value={formData.alternatePhone}
-                    onChangeText={value => handleInputChange('alternatePhone', value)}
-                    error={errors.alternatePhone}
-                    autoCapitalize="none"
-                    maxLength={16}
-                  />
-                </View>
-              </View>
+              <InputField
+                label="Mobile Phone"
+                placeholder="(555) 000-0000"
+                icon={Phone}
+                keyboardType="phone-pad"
+                required
+                value={formData.mobilePhone}
+                onChangeText={value => handleInputChange('mobilePhone', value)}
+                error={errors.mobilePhone}
+                autoCapitalize="none"
+                maxLength={16}
+              />
+
+              <InputField
+                label="Work/Alt Phone"
+                placeholder="(555) 000-0000"
+                icon={Phone}
+                keyboardType="phone-pad"
+                value={formData.alternatePhone}
+                onChangeText={value => handleInputChange('alternatePhone', value)}
+                error={errors.alternatePhone}
+                autoCapitalize="none"
+                maxLength={16}
+              />
             </Section>
 
             <Section title="Service Address" accent="#10b981">
@@ -1203,20 +1283,15 @@ const UpdateCustomerProfileScreen: React.FC = () => {
         </View>
       </KeyboardAvoidingView>
 
-      <BottomSheet
+      <SelectionModal
         visible={Boolean(activeSheet && sheetConfig)}
-        onClose={() => setActiveSheet(null)}
         title={sheetConfig?.title || 'Select'}
-      >
-        <ScrollView style={styles.sheetOptions} showsVerticalScrollIndicator={false}>
-          {(sheetConfig?.options || []).map(option => (
-            <TouchableOpacity key={option.value} style={styles.sheetOptionRow} onPress={option.onSelect}>
-              <Text style={styles.sheetOptionText}>{option.label}</Text>
-              {option.selected ? <Check size={18} color="#2563eb" strokeWidth={3} /> : null}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </BottomSheet>
+        searchPlaceholder={selectionSearchPlaceholder}
+        searchValue={selectionSearch}
+        onSearchChange={setSelectionSearch}
+        onClose={closeSelectionModal}
+        options={filteredSheetOptions}
+      />
     </SafeAreaView>
   );
 };
@@ -1336,33 +1411,90 @@ const styles = StyleSheet.create({
   saveBtnText: { color: 'white', fontSize: 18, fontWeight: '900' },
   serverErrorBox: { backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#fecaca', borderRadius: 18, padding: 14 },
   serverErrorText: { color: '#b91c1c', fontSize: 13, fontWeight: '700' },
-  modalRoot: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.26)', justifyContent: 'flex-end' },
-  modalBackdrop: { flex: 1 },
-  sheetCard: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    paddingTop: 10,
-    maxHeight: '82%',
+  selectionModalOverlay: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
-  sheetHandle: { alignSelf: 'center', width: 48, height: 5, borderRadius: 999, backgroundColor: '#cbd5e1', marginBottom: 14 },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  sheetTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
-  sheetCloseBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' },
-  sheetOptions: { maxHeight: 360 },
-  sheetOptionRow: {
-    minHeight: 54,
+  selectionModalContent: {
+    flex: 1,
+    padding: 24,
+  },
+  selectionModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  selectionModalTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  selectionModalCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectionSearchContainer: {
+    position: 'relative',
+    marginBottom: 24,
+    justifyContent: 'center',
+  },
+  selectionSearchIcon: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+  },
+  selectionSearchInput: {
+    width: '100%',
+    height: 56,
+    backgroundColor: '#f8fafc',
     borderRadius: 16,
-    paddingHorizontal: 16,
+    paddingLeft: 48,
+    paddingRight: 16,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  selectionModalScroll: { flex: 1 },
+  selectionModalItem: {
+    width: '100%',
+    padding: 20,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  sheetOptionText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#0f172a', paddingRight: 8 },
+  selectionModalItemContent: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  selectionModalItemTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  selectionModalItemSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  selectionModalCheckCircle: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default UpdateCustomerProfileScreen;

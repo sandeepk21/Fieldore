@@ -28,6 +28,7 @@ import {
   Linking,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -144,38 +145,6 @@ const formatDateTime = (value?: string | null) => {
 };
 
 const toTwoDigits = (value: number) => String(value).padStart(2, '0');
-
-const toInputDate = (value?: string | null) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-
-  return `${date.getFullYear()}-${toTwoDigits(date.getMonth() + 1)}-${toTwoDigits(date.getDate())}`;
-};
-
-const toInputTime = (value?: string | null) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-
-  return `${toTwoDigits(date.getHours())}:${toTwoDigits(date.getMinutes())}`;
-};
-
-const parseTimeParts = (value: string): TimeParts => {
-  const [hourString, minuteString] = value.split(':');
-  const hour24 = Number(hourString);
-  const minute = Number(minuteString);
-
-  if (!Number.isFinite(hour24) || !Number.isFinite(minute)) {
-    return { hour12: 9, minute: 0, meridiem: 'AM' };
-  }
-
-  return {
-    hour12: hour24 % 12 || 12,
-    minute,
-    meridiem: hour24 >= 12 ? 'PM' : 'AM',
-  };
-};
 
 const formatTimeParts = ({ hour12, minute, meridiem }: TimeParts) => {
   const normalizedHour12 = Math.min(Math.max(hour12, 1), 12);
@@ -351,19 +320,21 @@ const BottomSheet = ({
   title: string;
   children: React.ReactNode;
 }) => (
-  <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+  <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.modalRoot}>
       <Pressable style={styles.modalBackdrop} onPress={onClose} />
-      <View style={styles.sheetCard}>
-        <View style={styles.sheetHandle} />
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
-            <Text style={styles.sheetCloseText}>Close</Text>
-          </TouchableOpacity>
+      <SafeAreaView edges={['bottom']} style={styles.sheetSafeArea}>
+        <View style={styles.sheetCard}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>{title}</Text>
+            <TouchableOpacity style={styles.sheetCloseBtn} onPress={onClose}>
+              <Text style={styles.sheetCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          {children}
         </View>
-        {children}
-      </View>
+      </SafeAreaView>
     </View>
   </Modal>
 );
@@ -573,9 +544,16 @@ const JobDetailScreen: React.FC = () => {
   const [editDescription, setEditDescription] = useState('');
   const [timeParts, setTimeParts] = useState<TimeParts>({ hour12: 9, minute: 0, meridiem: 'AM' });
   const [calendarCursor, setCalendarCursor] = useState(new Date());
+  const [isChoosingMonthYear, setIsChoosingMonthYear] = useState(false);
   const [draggingChecklistId, setDraggingChecklistId] = useState('');
   const [editingNoteId, setEditingNoteId] = useState('');
   const [editingNoteBody, setEditingNoteBody] = useState('');
+
+  useEffect(() => {
+    if (activeSheet === 'date') {
+      setIsChoosingMonthYear(false);
+    }
+  }, [activeSheet]);
   const [countries, setCountries] = useState<CountryLookupResponse[]>([]);
   const [states, setStates] = useState<StateProvinceLookupResponse[]>([]);
   const pendingChecklistOrderRef = useRef<string[]>([]);
@@ -664,27 +642,6 @@ const JobDetailScreen: React.FC = () => {
     fetchStates();
   }, [editCountry, editUseCustomerPrimaryAddress]);
 
-  const hydrateEditForm = useCallback((currentJob: JobResponse) => {
-    setEditTitle(currentJob.title?.trim() || '');
-    setEditJobType(currentJob.jobType?.trim() || JOB_TYPE_OPTIONS[0]);
-    setEditPriority((currentJob.priority?.trim() as JobPriority) || 'Normal');
-    setEditStatus((currentJob.status?.trim() as JobStatus) || 'Scheduled');
-    setEditScheduledDate(toInputDate(currentJob.scheduledStartAt));
-    const nextTimeValue = toInputTime(currentJob.scheduledStartAt);
-    setEditScheduledTime(nextTimeValue);
-    setTimeParts(parseTimeParts(nextTimeValue));
-    setEditDurationMinutes(String(currentJob.estimatedDurationMinutes ?? 120));
-    setEditUseCustomerPrimaryAddress(Boolean(currentJob.useCustomerPrimaryAddress));
-    setEditAddressLine1(currentJob.serviceAddress?.line1?.trim() || '');
-    setEditAddressLine2(currentJob.serviceAddress?.line2?.trim() || '');
-    setEditCity(currentJob.serviceAddress?.city?.trim() || '');
-    setEditState(currentJob.serviceAddress?.stateOrProvince?.trim() || '');
-    setEditPostalCode(currentJob.serviceAddress?.postalCode?.trim() || '');
-    setEditCountry(currentJob.serviceAddress?.country?.trim() || '');
-    setEditDescription(currentJob.description?.trim() || '');
-    setCalendarCursor(currentJob.scheduledStartAt ? new Date(currentJob.scheduledStartAt) : new Date());
-  }, []);
-
   const scheduleLabel = useMemo(() => {
     if (!job?.scheduledStartAt) return 'No schedule';
 
@@ -771,8 +728,10 @@ const JobDetailScreen: React.FC = () => {
 
   const openEditSheet = () => {
     if (!job) return;
-    hydrateEditForm(job);
-    setActiveSheet('editJob');
+    router.push({
+      pathname: '../Screens/CreateJobScreen',
+      params: { jobId: job.id || '' },
+    });
   };
 
   const handleSaveJobDetails = async () => {
@@ -1841,7 +1800,13 @@ const JobDetailScreen: React.FC = () => {
               >
                 <Text style={styles.calendarNavText}>Prev</Text>
               </TouchableOpacity>
-              <Text style={styles.calendarMonthLabel}>{formatMonthLabel(calendarCursor)}</Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setIsChoosingMonthYear(prev => !prev)}
+                style={styles.calendarMonthSelectorBtn}
+              >
+                <Text style={styles.calendarMonthLabel}>{formatMonthLabel(calendarCursor)} ▾</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.calendarNavBtn}
                 onPress={() =>
@@ -1852,97 +1817,159 @@ const JobDetailScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.calendarWeekRow}>
-              {WEEKDAY_LABELS.map(day => (
-                <Text key={day} style={styles.calendarWeekLabel}>
-                  {day}
-                </Text>
-              ))}
-            </View>
+            {isChoosingMonthYear ? (
+              <View style={styles.monthYearPickerContainer}>
+                <View style={styles.monthYearPickerRow}>
+                  {/* Left Column: Months */}
+                  <View style={styles.monthYearPickerCol}>
+                    <Text style={styles.monthYearPickerTitle}>Select Month</Text>
+                    <ScrollView showsVerticalScrollIndicator={false} style={styles.monthYearPickerScroll}>
+                      {[
+                        'January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'
+                      ].map((monthName, idx) => {
+                        const isSelected = calendarCursor.getMonth() === idx;
+                        return (
+                          <TouchableOpacity
+                            key={monthName}
+                            style={[styles.monthYearChip, isSelected && styles.monthYearChipActive]}
+                            onPress={() => setCalendarCursor(current => new Date(current.getFullYear(), idx, 1))}
+                          >
+                            <Text style={[styles.monthYearChipText, isSelected && styles.monthYearChipTextActive]}>
+                              {monthName}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
 
-            <View style={styles.calendarGrid}>
-              {calendarDays.map((date, index) => {
-                const isoDate = date
-                  ? `${date.getFullYear()}-${toTwoDigits(date.getMonth() + 1)}-${toTwoDigits(date.getDate())}`
-                  : '';
-                const isSelected = isoDate === editScheduledDate;
+                  {/* Right Column: Years */}
+                  <View style={styles.monthYearPickerCol}>
+                    <Text style={styles.monthYearPickerTitle}>Select Year</Text>
+                    <ScrollView showsVerticalScrollIndicator={false} style={styles.monthYearPickerScroll}>
+                      {Array.from({ length: 21 }, (_, i) => new Date().getFullYear() - 10 + i).map(year => {
+                        const isSelected = calendarCursor.getFullYear() === year;
+                        return (
+                          <TouchableOpacity
+                            key={year}
+                            style={[styles.monthYearChip, isSelected && styles.monthYearChipActive]}
+                            onPress={() => setCalendarCursor(current => new Date(year, current.getMonth(), 1))}
+                          >
+                            <Text style={[styles.monthYearChipText, isSelected && styles.monthYearChipTextActive]}>
+                              {year}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
 
-                return (
-                  <TouchableOpacity
-                    key={`${isoDate}-${index}`}
-                    style={[styles.calendarCell, isSelected && styles.calendarCellSelected, !date && styles.calendarCellEmpty]}
-                    disabled={!date}
-                    onPress={() => {
-                      if (isoDate) {
-                        setEditScheduledDate(isoDate);
-                        setActiveSheet('editJob');
-                      }
-                    }}
-                  >
-                    <Text style={[styles.calendarCellText, isSelected && styles.calendarCellTextSelected]}>
-                      {date ? date.getDate() : ''}
+                <TouchableOpacity
+                  style={styles.monthYearConfirmBtn}
+                  onPress={() => setIsChoosingMonthYear(false)}
+                >
+                  <Text style={styles.monthYearConfirmBtnText}>Back to Calendar</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <View style={styles.calendarWeekRow}>
+                  {WEEKDAY_LABELS.map(day => (
+                    <Text key={day} style={styles.calendarWeekLabel}>
+                      {day}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+                  ))}
+                </View>
+
+                <View style={styles.calendarGrid}>
+                  {calendarDays.map((date, index) => {
+                    const isoDate = date
+                      ? `${date.getFullYear()}-${toTwoDigits(date.getMonth() + 1)}-${toTwoDigits(date.getDate())}`
+                      : '';
+                    const isSelected = isoDate === editScheduledDate;
+
+                    return (
+                      <TouchableOpacity
+                        key={`${isoDate}-${index}`}
+                        style={[styles.calendarCell, isSelected && styles.calendarCellSelected, !date && styles.calendarCellEmpty]}
+                        disabled={!date}
+                        onPress={() => {
+                          if (isoDate) {
+                            setEditScheduledDate(isoDate);
+                            setActiveSheet('editJob');
+                          }
+                        }}
+                      >
+                        <Text style={[styles.calendarCellText, isSelected && styles.calendarCellTextSelected]}>
+                          {date ? date.getDate() : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
           </View>
         ) : activeSheet === 'time' ? (
           <View style={styles.sheetContent}>
-            <View style={styles.timeSheetContent}>
-              <View style={styles.timeSelectorColumn}>
-                <Text style={styles.timeSelectorLabel}>Hour</Text>
-                <View style={styles.timeChipWrap}>
-                  {HOUR_OPTIONS.map(hour => (
-                    <TouchableOpacity
-                      key={hour}
-                      style={[styles.timeChip, timeParts.hour12 === hour && styles.timeChipActive]}
-                      onPress={() => setTimeParts(current => ({ ...current, hour12: hour }))}
-                    >
-                      <Text style={[styles.timeChipText, timeParts.hour12 === hour && styles.timeChipTextActive]}>
-                        {hour}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.timePickerScroll} contentContainerStyle={{ paddingBottom: 16 }}>
+              <View style={styles.timeSheetContent}>
+                <View style={styles.timeSelectorColumn}>
+                  <Text style={styles.timeSelectorLabel}>Hour</Text>
+                  <View style={styles.timeChipWrap}>
+                    {HOUR_OPTIONS.map(hour => (
+                      <TouchableOpacity
+                        key={hour}
+                        style={[styles.timeChip, timeParts.hour12 === hour && styles.timeChipActive]}
+                        onPress={() => setTimeParts(current => ({ ...current, hour12: hour }))}
+                      >
+                        <Text style={[styles.timeChipText, timeParts.hour12 === hour && styles.timeChipTextActive]}>
+                          {hour}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.timeSelectorColumn}>
+                  <Text style={styles.timeSelectorLabel}>Minutes</Text>
+                  <View style={styles.timeChipWrap}>
+                    {MINUTE_OPTIONS.map(minute => (
+                      <TouchableOpacity
+                        key={minute}
+                        style={[styles.timeChip, timeParts.minute === minute && styles.timeChipActive]}
+                        onPress={() => setTimeParts(current => ({ ...current, minute }))}
+                      >
+                        <Text style={[styles.timeChipText, timeParts.minute === minute && styles.timeChipTextActive]}>
+                          {toTwoDigits(minute)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.timeSelectorColumn}>
-                <Text style={styles.timeSelectorLabel}>Minutes</Text>
-                <View style={styles.timeChipWrap}>
-                  {MINUTE_OPTIONS.map(minute => (
-                    <TouchableOpacity
-                      key={minute}
-                      style={[styles.timeChip, timeParts.minute === minute && styles.timeChipActive]}
-                      onPress={() => setTimeParts(current => ({ ...current, minute }))}
-                    >
-                      <Text style={[styles.timeChipText, timeParts.minute === minute && styles.timeChipTextActive]}>
-                        {toTwoDigits(minute)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.meridiemRow}>
-              {(['AM', 'PM'] as TimeParts['meridiem'][]).map(option => (
-                <TouchableOpacity
-                  key={option}
-                  style={[styles.meridiemChip, timeParts.meridiem === option && styles.meridiemChipActive]}
-                  onPress={() => setTimeParts(current => ({ ...current, meridiem: option }))}
-                >
-                  <Text
-                    style={[
-                      styles.meridiemChipText,
-                      timeParts.meridiem === option && styles.meridiemChipTextActive,
-                    ]}
+              <View style={styles.meridiemRow}>
+                {(['AM', 'PM'] as TimeParts['meridiem'][]).map(option => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[styles.meridiemChip, timeParts.meridiem === option && styles.meridiemChipActive]}
+                    onPress={() => setTimeParts(current => ({ ...current, meridiem: option }))}
                   >
-                    {option}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    <Text
+                      style={[
+                        styles.meridiemChipText,
+                        timeParts.meridiem === option && styles.meridiemChipTextActive,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
 
             <TouchableOpacity
               style={styles.sheetPrimaryBtn}
@@ -2457,14 +2484,18 @@ const styles = StyleSheet.create({
   retryBtnText: { color: 'white', fontSize: 14, fontWeight: '800' },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 23, 42, 0.38)' },
+  sheetSafeArea: {
+    justifyContent: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+  },
   sheetCard: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
     backgroundColor: 'white',
+    borderRadius: 30,
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 30,
-    maxHeight: '78%',
+    paddingBottom: 22,
+    maxHeight: '85%',
   },
   sheetHandle: {
     alignSelf: 'center',
@@ -2623,6 +2654,82 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sheetOptionText: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  timePickerScroll: {
+    maxHeight: 280,
+  },
+  monthYearPickerContainer: {
+    paddingTop: 10,
+    paddingBottom: 16,
+  },
+  monthYearPickerRow: {
+    flexDirection: 'row',
+    gap: 16,
+    height: 240,
+  },
+  monthYearPickerCol: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    padding: 12,
+  },
+  monthYearPickerTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  monthYearPickerScroll: {
+    flex: 1,
+  },
+  monthYearChip: {
+    width: '100%',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 6,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  monthYearChipActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
+  },
+  monthYearChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  monthYearChipTextActive: {
+    color: '#2563eb',
+  },
+  monthYearConfirmBtn: {
+    height: 50,
+    backgroundColor: '#2563eb',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  monthYearConfirmBtnText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  calendarMonthSelectorBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
 });
 
 export default JobDetailScreen;

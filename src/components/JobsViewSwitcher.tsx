@@ -18,19 +18,23 @@ const JobsViewSwitcher: React.FC<JobsViewSwitcherProps> = ({ activeView }) => {
   return (
     <View style={styles.container}>
       <TouchableOpacity
-        style={[styles.segment, activeView === 'schedule' && styles.segmentActive]}
-        activeOpacity={0.9}
+        style={[styles.tab, activeView === 'schedule' && styles.tabActive]}
+        activeOpacity={0.75}
         onPress={() => navigateToView('schedule')}
       >
-        <Text style={[styles.segmentText, activeView === 'schedule' && styles.segmentTextActive]}>Schedule</Text>
+        <Text style={[styles.tabText, activeView === 'schedule' && styles.tabTextActive]}>
+          SCHEDULE
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.segment, activeView === 'list' && styles.segmentActive]}
-        activeOpacity={0.9}
+        style={[styles.tab, activeView === 'list' && styles.tabActive]}
+        activeOpacity={0.75}
         onPress={() => navigateToView('list')}
       >
-        <Text style={[styles.segmentText, activeView === 'list' && styles.segmentTextActive]}>Joblist</Text>
+        <Text style={[styles.tabText, activeView === 'list' && styles.tabTextActive]}>
+          JOB LIST
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -39,35 +43,35 @@ const JobsViewSwitcher: React.FC<JobsViewSwitcherProps> = ({ activeView }) => {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 20,
-    padding: 4,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    marginTop: 8,
+    marginHorizontal: -16,
   },
-  segment: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
+  tab: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 3.5,
+    borderBottomColor: 'transparent',
+    marginBottom: -1,
   },
-  segmentActive: {
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+  tabActive: {
+    borderBottomColor: '#2563eb', // brand blue-600
   },
-  segmentText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  segmentTextActive: {
+  tabText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#2563eb', // blue-600
+    color: '#94a3b8', // slate-400
+    letterSpacing: 1.2,
+  },
+  tabTextActive: {
+    color: '#2563eb', // brand blue-600
   },
 });
 
 export default JobsViewSwitcher;
+
+

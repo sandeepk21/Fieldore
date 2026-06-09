@@ -1,18 +1,21 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
+  AlertCircle,
   Briefcase,
-  CalendarDays,
+  CheckCircle,
   ChevronLeft,
   ChevronRight,
+  Clock,
   FileText,
   Mail,
   MapPin,
   MoreVertical,
   Phone,
   Plus,
-  ReceiptText,
+  RefreshCw,
   StickyNote,
+  XCircle
 } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -183,46 +186,87 @@ const JobsTab = ({ jobs }: { jobs: CustomerJobSummaryResponse[] }) => {
   return (
     <View style={styles.listGap}>
       {jobs.map(job => {
-        const status = toHeadline(job.status, 'Scheduled');
-        const schedule = job.scheduledStartAt
+        const start = job.scheduledStartAt ? new Date(job.scheduledStartAt) : null;
+        let day = '--';
+        let month = 'TBD';
+        if (start && !Number.isNaN(start.getTime())) {
+          day = new Intl.DateTimeFormat('en-US', { day: '2-digit' }).format(start);
+          month = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(start).toUpperCase();
+        }
+
+        const statusStyle = getJobStatusTone(job.status);
+        const timeLabel = job.scheduledStartAt
           ? `${formatDate(job.scheduledStartAt)}${job.scheduledEndAt ? ` - ${formatDate(job.scheduledEndAt)}` : ''}`
           : 'Schedule pending';
 
+        const normalizedStatus = (job.status || 'Scheduled').trim();
+
         return (
           <TouchableOpacity
-            key={job.id || job.jobNumber || schedule}
-            style={styles.recordCard}
-            activeOpacity={0.9}
+            key={job.id || job.jobNumber || timeLabel}
+            style={styles.compactJobCard}
+            activeOpacity={0.7}
             onPress={() => openJobScreen(job.id)}
             disabled={!job.id}
           >
-            <View style={styles.recordHeader}>
-              <View style={styles.recordHeaderLeft}>
-                <View style={styles.recordIconBox}>
-                  <Briefcase size={20} color="#2563eb" />
-                </View>
-                <View style={styles.recordTextWrap}>
-                  <Text style={styles.recordTitle}>{job.title?.trim() || job.jobNumber?.trim() || 'Untitled Job'}</Text>
-                  <Text style={styles.recordSubtitle}>
-                    {job.jobNumber?.trim() || 'Job number pending'}
-                    {job.jobType?.trim() ? ` • ${toHeadline(job.jobType)}` : ''}
-                  </Text>
-                </View>
+            <View style={styles.cardHeader}>
+              <View style={styles.dateBlock}>
+                <Text style={styles.dateMonth}>{month}</Text>
+                <Text style={styles.dateDay}>{day}</Text>
               </View>
-              <ChevronRight size={18} color="#cbd5e1" />
+
+              <View style={styles.cardMain}>
+                <View style={styles.titleRow}>
+                  <View style={{ flex: 1 }}>
+                    {!!job.jobNumber && (
+                      <Text style={styles.jobNumberText}>#{job.jobNumber}</Text>
+                    )}
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
+                    {normalizedStatus === 'In Progress' && (
+                      <RefreshCw size={11} color={statusStyle.text} style={{ marginRight: 4 }} />
+                    )}
+                    {normalizedStatus === 'Scheduled' && (
+                      <Clock size={11} color={statusStyle.text} style={{ marginRight: 4 }} />
+                    )}
+                    {normalizedStatus === 'Completed' && (
+                      <CheckCircle size={11} color={statusStyle.text} style={{ marginRight: 4 }} />
+                    )}
+                    {normalizedStatus === 'Cancelled' && (
+                      <XCircle size={11} color={statusStyle.text} style={{ marginRight: 4 }} />
+                    )}
+                    <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                      {normalizedStatus}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.jobTitle} numberOfLines={1}>
+                  {job.title?.trim() || 'Untitled Job'}
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.recordMetaRow}>
-              <View style={styles.inlineMeta}>
-                <CalendarDays size={14} color="#94a3b8" />
-                <Text style={styles.recordMetaText}>{schedule}</Text>
-              </View>
-              <StatusBadge label={status} tone={getJobStatusTone(job.status)} />
-            </View>
+            <View style={styles.cardDivider} />
 
-            <View style={styles.recordFooter}>
-              <Text style={styles.recordFooterText}>Priority: {toHeadline(job.priority, 'Normal')}</Text>
-              <Text style={styles.recordFooterText}>Updated {formatDate(job.updatedAt || job.createdAt)}</Text>
+            <View style={styles.cardFooter}>
+              <View style={styles.badgeRow}>
+                {!!job.jobType?.trim() && (
+                  <View style={styles.typeBadge}>
+                    <Briefcase size={12} color="#64748b" />
+                    <Text style={styles.typeText}>{toHeadline(job.jobType)}</Text>
+                  </View>
+                )}
+                {job.priority === 'High' && (
+                  <View style={styles.priorityBadge}>
+                    <AlertCircle size={12} color="#ef4444" />
+                    <Text style={styles.priorityText}>High</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.viewDetailsBtn}>
+                <Text style={styles.viewDetailsText}>View Details</Text>
+                <ChevronRight size={14} color="#2563eb" />
+              </View>
             </View>
           </TouchableOpacity>
         );
@@ -244,47 +288,60 @@ const InvoicesTab = ({ invoices }: { invoices: CustomerInvoiceSummaryResponse[] 
   return (
     <View style={styles.listGap}>
       {invoices.map(invoice => {
-        const status = formatInvoiceStatusLabel(invoice.status);
-        const total = formatInvoiceCurrency(invoice.totalAmount);
-        const balance = formatInvoiceCurrency(invoice.balanceDueAmount ?? invoice.totalAmount);
+        const tone = getInvoiceStatusTone(invoice.status);
+        const number = invoice.invoiceNumber?.trim() || invoice.id || 'Invoice';
+        const formattedTotal = formatInvoiceCurrency(invoice.totalAmount);
+
+        const now = new Date();
+        let isOverdue = false;
+        if (invoice.status?.toLowerCase() !== 'paid' && invoice.status?.toLowerCase() !== 'cancelled' && invoice.dueOn) {
+          if (new Date(invoice.dueOn) < now) isOverdue = true;
+        }
 
         return (
           <TouchableOpacity
-            key={invoice.id || invoice.invoiceNumber || status}
-            style={styles.recordCard}
-            activeOpacity={0.9}
+            key={invoice.id || invoice.invoiceNumber || invoice.status}
+            style={styles.compactInvoiceCard}
+            activeOpacity={0.7}
             onPress={() => openInvoiceScreen(invoice.id)}
             disabled={!invoice.id}
           >
-            <View style={styles.recordHeader}>
-              <View style={styles.recordHeaderLeft}>
-                <View style={styles.recordIconBox}>
-                  <ReceiptText size={20} color="#2563eb" />
-                </View>
-                <View style={styles.recordTextWrap}>
-                  <Text style={styles.recordTitle}>{invoice.invoiceNumber?.trim() || invoice.id || 'Invoice'}</Text>
-                  <Text style={styles.recordSubtitle}>
-                    Issued {formatDate(invoice.issuedOn)}
-                    {invoice.dueOn ? ` • Due ${formatDate(invoice.dueOn)}` : ''}
-                  </Text>
+            <View style={styles.invoiceCardTop}>
+              <View style={styles.invoiceIconWrap}>
+                <FileText size={20} color="#2563eb" />
+              </View>
+              <View style={styles.invoiceInfoLeft}>
+                <Text style={styles.invoiceTitleText} numberOfLines={1}>{number}</Text>
+                <View style={styles.metaRow}>
+                  <Text style={styles.invoiceSubtext}>Issued {formatDate(invoice.issuedOn)}</Text>
+                  {invoice.jobId && (
+                    <>
+                      <View style={styles.metaDot} />
+                      <Text style={styles.jobRefText}>Linked Job</Text>
+                    </>
+                  )}
                 </View>
               </View>
-              <ChevronRight size={18} color="#cbd5e1" />
-            </View>
-
-            <View style={styles.recordMetaRow}>
-              <View style={styles.amountBlock}>
-                <Text style={styles.amountLabel}>Total</Text>
-                <Text style={styles.amountValue}>{total}</Text>
+              <View style={styles.invoiceInfoRight}>
+                <Text style={styles.invoiceAmountText}>{formattedTotal}</Text>
               </View>
-              <StatusBadge label={status} tone={getInvoiceStatusTone(invoice.status)} />
             </View>
 
-            <View style={styles.recordFooter}>
-              <Text style={styles.recordFooterText}>Balance due: {balance}</Text>
-              <Text style={styles.recordFooterText}>
-                {invoice.jobId ? `Linked job: ${invoice.jobId}` : 'Standalone invoice'}
-              </Text>
+            <View style={styles.invoiceCardBottom}>
+              <View style={[styles.statusBadgeInvoice, { backgroundColor: tone.bg }]}>
+                <View style={[styles.statusDot, { backgroundColor: tone.text }]} />
+                <Text style={[styles.statusTextInvoice, { color: tone.text }]}>
+                  {formatInvoiceStatusLabel(invoice.status)}
+                </Text>
+              </View>
+
+              <View style={styles.dueDateRow}>
+                <Text style={styles.footerLabel}>Due </Text>
+                <Text style={[styles.footerDate, isOverdue && styles.overdueText]}>
+                  {formatDate(invoice.dueOn, 'No due date')}
+                </Text>
+                {isOverdue && <View style={styles.overdueIndicator} />}
+              </View>
             </View>
           </TouchableOpacity>
         );
@@ -519,7 +576,7 @@ const CustomerProfile: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      
+
 
       <View style={styles.navHeader}>
         <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
@@ -809,6 +866,254 @@ const styles = StyleSheet.create({
   },
   noteDate: { flex: 1, fontSize: 10, fontWeight: '900', color: '#cbd5e1' },
   editBtn: { fontSize: 10, fontWeight: '700', color: '#2563eb' },
+
+  // Compact Job Card Styles
+  compactJobCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#64748b',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  dateBlock: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  dateMonth: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+  },
+  dateDay: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 1,
+  },
+  cardMain: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  jobNumberText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+  },
+  statusText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  jobTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginTop: 3,
+    letterSpacing: -0.2,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginVertical: 10,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  typeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  priorityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef2f2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  priorityText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ef4444',
+  },
+  viewDetailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  viewDetailsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+
+  // Compact Invoice Card Styles
+  compactInvoiceCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#64748b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  invoiceCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  invoiceIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  invoiceInfoLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  invoiceTitleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 2,
+    letterSpacing: -0.2,
+  },
+  invoiceSubtext: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  jobRefText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+  invoiceInfoRight: {
+    alignItems: 'flex-end',
+  },
+  invoiceAmountText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  invoiceCardBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  statusBadgeInvoice: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusTextInvoice: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  dueDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  footerLabel: {
+    fontSize: 10,
+    color: '#94a3b8',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  footerDate: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  overdueText: {
+    color: '#ef4444',
+  },
+  overdueIndicator: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#ef4444',
+    marginLeft: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#cbd5e1',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
 });
 
 export default CustomerProfile;

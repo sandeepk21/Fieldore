@@ -400,7 +400,7 @@ const JobList: React.FC = () => {
     setSelectedDatePreset('Custom Range');
   };
 
-  const titleCountLabel = activeFilter === 'All' ? 'TOTAL JOBS' : `${activeFilter.toUpperCase()} JOBS`;
+  const titleCountLabel = activeFilter === 'All' ? 'Total Jobs' : `${activeFilter} Jobs`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -714,8 +714,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, backgroundColor: '#ffffff' },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
-  titleText: { fontSize: 32, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 },
-  subtitleText: { marginTop: 4, fontSize: 14, color: '#64748b', fontWeight: '600' },
+  titleText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  subtitleText: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '600',
+  },
   moreBtn: {
     width: 44,
     height: 44,
