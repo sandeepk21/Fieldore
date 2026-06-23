@@ -84,6 +84,28 @@ const openInvoiceScreen = (invoiceId?: string) => {
   });
 };
 
+const openEstimateCreator = (customerId: string, customerName?: string) => {
+  if (!customerId) {
+    return;
+  }
+
+  router.push({
+    pathname: '../Screens/EstimateCreatorScreen',
+    params: { customerId, customerName: customerName || '' },
+  });
+};
+
+const openEstimateScreen = (estimateId?: string) => {
+  if (!estimateId) {
+    return;
+  }
+
+  router.push({
+    pathname: '../Screens/EstimateDetailScreen',
+    params: { estimateId },
+  });
+};
+
 const formatDate = (value?: string | null, fallback = 'Not available') => {
   if (!value) return fallback;
   const date = new Date(value);
@@ -350,23 +372,37 @@ const InvoicesTab = ({ invoices }: { invoices: CustomerInvoiceSummaryResponse[] 
   );
 };
 
-const EstimatesTab = ({ estimates }: { estimates: CustomerEstimateSummaryResponse[] }) => {
-  if (!estimates.length) {
-    return (
-      <EmptyTabCard
-        title="No estimates yet"
-        subtitle="Estimates linked to this customer will show here when they’re available."
-      />
-    );
-  }
-
+const EstimatesTab = ({
+  estimates,
+  onCreate,
+}: {
+  estimates: CustomerEstimateSummaryResponse[];
+  onCreate: () => void;
+}) => {
   return (
     <View style={styles.listGap}>
-      {estimates.map(estimate => {
+      <TouchableOpacity style={styles.newEstimateBtn} onPress={onCreate} activeOpacity={0.85}>
+        <Plus size={18} color="#2563eb" strokeWidth={2.5} />
+        <Text style={styles.newEstimateBtnText}>New Estimate</Text>
+      </TouchableOpacity>
+
+      {!estimates.length ? (
+        <EmptyTabCard
+          title="No estimates yet"
+          subtitle="Create a quote for this customer with the button above."
+        />
+      ) : (
+        estimates.map(estimate => {
         const status = toHeadline(estimate.status, 'Draft');
 
         return (
-          <View key={estimate.id || estimate.estimateNumber || status} style={styles.recordCard}>
+          <TouchableOpacity
+            key={estimate.id || estimate.estimateNumber || status}
+            style={styles.recordCard}
+            activeOpacity={0.7}
+            onPress={() => openEstimateScreen(estimate.id)}
+            disabled={!estimate.id}
+          >
             <View style={styles.recordHeader}>
               <View style={styles.recordHeaderLeft}>
                 <View style={styles.recordIconBox}>
@@ -389,9 +425,10 @@ const EstimatesTab = ({ estimates }: { estimates: CustomerEstimateSummaryRespons
             </View>
 
             {!!estimate.notes?.trim() && <Text style={styles.recordNotes}>{estimate.notes.trim()}</Text>}
-          </View>
+          </TouchableOpacity>
         );
-      })}
+        })
+      )}
     </View>
   );
 };
@@ -660,7 +697,10 @@ const CustomerProfile: React.FC = () => {
             )}
 
             {activeTab === 'Estimates' && (
-              <EstimatesTab estimates={estimates} />
+              <EstimatesTab
+                estimates={estimates}
+                onCreate={() => openEstimateCreator(customerId, displayName)}
+              />
             )}
 
             {activeTab === 'Notes' && (
@@ -796,6 +836,18 @@ const styles = StyleSheet.create({
   },
   contentArea: { padding: 24 },
   listGap: { gap: 16 },
+  newEstimateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 16,
+    paddingVertical: 14,
+  },
+  newEstimateBtnText: { fontSize: 14, fontWeight: '800', color: '#2563eb' },
   recordCard: {
     backgroundColor: 'white',
     borderRadius: 24,

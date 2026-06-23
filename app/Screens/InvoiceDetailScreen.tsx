@@ -2,21 +2,26 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
   Briefcase,
+  ChevronDown,
   ChevronLeft,
   Eye,
   Mail,
   MapPin,
-  PenSquare
+  PenSquare,
+  Plus,
+  Trash2,
 } from 'lucide-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -28,6 +33,15 @@ import {
   getInvoiceStatusTone,
   updateInvoiceStatusApi,
 } from '@/src/services/invoiceService';
+import {
+  PAYMENT_METHODS,
+  PaymentRecord,
+  RecordPaymentRequest,
+  deletePaymentApi,
+  formatPaymentDate,
+  formatPaymentMethodLabel,
+  recordPaymentApi,
+} from '@/src/services/paymentService';
 
 const STATUS_ACTIONS = ['Draft', 'Sent', 'Viewed', 'Partially Paid', 'Paid', 'Overdue'] as const;
 
@@ -72,6 +86,17 @@ const InvoiceDetailScreen: React.FC = () => {
   const [error, setError] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
+  // Payment modal state
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState<string>('cash');
+  const [payDate, setPayDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [payRef, setPayRef] = useState('');
+  const [payNotes, setPayNotes] = useState('');
+  const [showMethodPicker, setShowMethodPicker] = useState(false);
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
+  const [isDeletingPayment, setIsDeletingPayment] = useState<string | null>(null);
+
   const loadInvoice = useCallback(async () => {
     if (!invoiceId) {
       setError('Invoice id is missing.');
@@ -106,6 +131,67 @@ const InvoiceDetailScreen: React.FC = () => {
   const taxAmount = invoice?.taxAmount || 0;
   const totalAmount = invoice?.totalAmount || 0;
   const balanceDueAmount = invoice?.balanceDueAmount ?? totalAmount;
+
+  const payments: PaymentRecord[] = (invoice as any)?.payments ?? [];
+
+  const openPayModal = () => {
+    setPayAmount('');
+    setPayMethod('cash');
+    setPayDate(new Date().toISOString().split('T')[0]);
+    setPayRef('');
+    setPayNotes('');
+    setShowMethodPicker(false);
+    setShowPayModal(true);
+  };
+
+  const handleRecordPayment = async () => {
+    const amount = parseFloat(payAmount);
+    if (!payAmount || isNaN(amount) || amount <= 0) {
+      Alert.alert('Validation', 'Please enter a valid amount.');
+      return;
+    }
+    if (!invoiceId) return;
+
+    setIsSavingPayment(true);
+    try {
+      const payload: RecordPaymentRequest = {
+        amount,
+        method: payMethod,
+        paidAt: new Date(payDate).toISOString(),
+        referenceNumber: payRef.trim() || null,
+        notes: payNotes.trim() || null,
+      };
+      await recordPaymentApi(invoiceId, payload);
+      setShowPayModal(false);
+      await loadInvoice();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to record payment.');
+    } finally {
+      setIsSavingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = (paymentId: string) => {
+    if (!invoiceId) return;
+    Alert.alert('Delete Payment', 'Remove this payment record?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setIsDeletingPayment(paymentId);
+          try {
+            await deletePaymentApi(invoiceId, paymentId);
+            await loadInvoice();
+          } catch (err: any) {
+            Alert.alert('Error', err?.message || 'Failed to delete payment.');
+          } finally {
+            setIsDeletingPayment(null);
+          }
+        },
+      },
+    ]);
+  };
 
   const handleStatusUpdate = async (status: string) => {
     if (!invoiceId || status === currentStatus) return;
@@ -343,6 +429,57 @@ const InvoiceDetailScreen: React.FC = () => {
           </View>
         </View>
 
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Payments</Text>
+            <TouchableOpacity style={styles.addPayBtn} onPress={openPayModal}>
+              <Plus size={14} color="#2563eb" />
+              <Text style={styles.addPayBtnText}>Record</Text>
+            </TouchableOpacity>
+          </View>
+          {payments.length === 0 ? (
+            <View style={styles.emptyPayments}>
+              <Text style={styles.emptyPaymentsText}>No payments recorded yet</Text>
+            </View>
+          ) : (
+            <View style={styles.paymentsList}>
+              {payments.map((p, idx) => {
+                const isLast = idx === payments.length - 1;
+                const isDeleting = isDeletingPayment === p.id;
+                return (
+                  <View key={p.id} style={[styles.paymentRow, isLast && { borderBottomWidth: 0 }]}>
+                    <View style={styles.paymentLeft}>
+                      <Text style={styles.paymentAmount}>{formatInvoiceCurrency(p.amount)}</Text>
+                      <View style={styles.paymentMeta}>
+                        <View style={[styles.methodBadge, p.isStripePayment && styles.methodBadgeStripe]}>
+                          <Text style={[styles.methodBadgeText, p.isStripePayment && styles.methodBadgeTextStripe]}>
+                            {p.isStripePayment ? 'Stripe' : formatPaymentMethodLabel(p.method)}
+                          </Text>
+                        </View>
+                        <Text style={styles.paymentDate}>{formatPaymentDate(p.paidAt)}</Text>
+                      </View>
+                      {p.referenceNumber ? <Text style={styles.paymentRef}>Ref: {p.referenceNumber}</Text> : null}
+                    </View>
+                    {!p.isStripePayment && (
+                      <TouchableOpacity
+                        style={styles.deletePayBtn}
+                        onPress={() => handleDeletePayment(p.id)}
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? (
+                          <ActivityIndicator size="small" color="#dc2626" />
+                        ) : (
+                          <Trash2 size={16} color="#dc2626" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
         {(invoice.notes?.trim() || invoice.jobId) && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -374,6 +511,108 @@ const InvoiceDetailScreen: React.FC = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* Record Payment Modal */}
+      <Modal visible={showPayModal} animationType="slide" transparent onRequestClose={() => setShowPayModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Record Payment</Text>
+              <TouchableOpacity onPress={() => setShowPayModal(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
+              <Text style={styles.fieldLabel}>Amount *</Text>
+              <TextInput
+                style={styles.textInput}
+                value={payAmount}
+                onChangeText={setPayAmount}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Payment Method *</Text>
+              <TouchableOpacity
+                style={styles.dropdownTrigger}
+                onPress={() => setShowMethodPicker(v => !v)}
+              >
+                <Text style={styles.dropdownTriggerText}>
+                  {PAYMENT_METHODS.find(m => m.value === payMethod)?.label ?? 'Select method'}
+                </Text>
+                <ChevronDown size={16} color="#64748b" />
+              </TouchableOpacity>
+              {showMethodPicker && (
+                <View style={styles.dropdownList}>
+                  {PAYMENT_METHODS.map(m => (
+                    <TouchableOpacity
+                      key={m.value}
+                      style={[styles.dropdownOption, payMethod === m.value && styles.dropdownOptionActive]}
+                      onPress={() => { setPayMethod(m.value); setShowMethodPicker(false); }}
+                    >
+                      <Text style={[styles.dropdownOptionText, payMethod === m.value && styles.dropdownOptionTextActive]}>
+                        {m.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <Text style={styles.fieldLabel}>Date (YYYY-MM-DD) *</Text>
+              <TextInput
+                style={styles.textInput}
+                value={payDate}
+                onChangeText={setPayDate}
+                placeholder="2025-01-01"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Reference Number</Text>
+              <TextInput
+                style={styles.textInput}
+                value={payRef}
+                onChangeText={setPayRef}
+                placeholder="Cheque no., transaction ID…"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.fieldLabel}>Notes</Text>
+              <TextInput
+                style={[styles.textInput, styles.textInputMulti]}
+                value={payNotes}
+                onChangeText={setPayNotes}
+                placeholder="Optional notes"
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={3}
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={() => setShowPayModal(false)}
+                  disabled={isSavingPayment}
+                >
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveBtn, isSavingPayment && { opacity: 0.6 }]}
+                  onPress={handleRecordPayment}
+                  disabled={isSavingPayment}
+                >
+                  {isSavingPayment ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.saveBtnText}>Save Payment</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -424,7 +663,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 13, fontWeight: '700' },
 
   section: { marginBottom: 24 },
-  sectionHeader: { marginBottom: 12 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
 
   statusRow: { gap: 10, paddingRight: 20 },
@@ -559,6 +798,48 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryButtonText: { color: '#fff', fontWeight: '600' },
+
+  // Payments section
+  addPayBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  addPayBtnText: { fontSize: 13, fontWeight: '600', color: '#2563eb' },
+  emptyPayments: { padding: 16, borderRadius: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' },
+  emptyPaymentsText: { fontSize: 14, color: '#94a3b8', fontWeight: '500' },
+  paymentsList: { borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden' },
+  paymentRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  paymentLeft: { flex: 1 },
+  paymentAmount: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  paymentMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  methodBadge: { backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  methodBadgeStripe: { backgroundColor: '#ede9fe' },
+  methodBadgeText: { fontSize: 11, fontWeight: '600', color: '#475569' },
+  methodBadgeTextStripe: { color: '#7c3aed' },
+  paymentDate: { fontSize: 12, color: '#94a3b8', fontWeight: '500' },
+  paymentRef: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  deletePayBtn: { padding: 8 },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
+  modalCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  modalCloseBtnText: { fontSize: 14, color: '#64748b', fontWeight: '600' },
+  modalBody: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  fieldLabel: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 6, marginTop: 14 },
+  textInput: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: '#0f172a' },
+  textInputMulti: { minHeight: 72, textAlignVertical: 'top' },
+  dropdownTrigger: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  dropdownTriggerText: { fontSize: 15, color: '#0f172a', fontWeight: '500' },
+  dropdownList: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, marginTop: 4, overflow: 'hidden' },
+  dropdownOption: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  dropdownOptionActive: { backgroundColor: '#eff6ff' },
+  dropdownOptionText: { fontSize: 15, color: '#0f172a', fontWeight: '500' },
+  dropdownOptionTextActive: { color: '#2563eb', fontWeight: '700' },
+  modalActions: { flexDirection: 'row', gap: 12, paddingVertical: 20 },
+  cancelBtn: { flex: 1, backgroundColor: '#f1f5f9', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  cancelBtnText: { fontSize: 15, fontWeight: '700', color: '#475569' },
+  saveBtn: { flex: 2, backgroundColor: '#2563eb', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });
 
 

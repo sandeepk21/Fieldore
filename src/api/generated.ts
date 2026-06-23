@@ -4,11 +4,11 @@
  * Fieldore API
  * OpenAPI spec version: v1
  */
+import { axiosInstance as axios } from './axiosInstance';
 import type {
   AxiosRequestConfig,
   AxiosResponse
 } from 'axios';
-import { axiosInstance as axios } from './axiosInstance';
 
 export interface AddJobNoteRequest {
   /** @nullable */
@@ -68,6 +68,8 @@ export interface BusinessDetailsResponse {
   address?: AddressDto;
   /** @nullable */
   timeZone?: string | null;
+  /** @nullable */
+  currency?: string | null;
 }
 
 export interface BusinessDetailsResponseApiResponse {
@@ -99,6 +101,30 @@ export interface BusinessRegisterRequest {
   country?: string | null;
   /** @nullable */
   timeZone?: string | null;
+  /** @nullable */
+  currency?: string | null;
+}
+
+export interface ConvertEstimateToJobRequest {
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  scheduledStartAt?: string | null;
+}
+
+export interface ConvertEstimateToJobResponse {
+  estimateId?: string;
+  jobId?: string;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface ConvertEstimateToJobResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: ConvertEstimateToJobResponse;
 }
 
 export interface CountryLookupResponse {
@@ -144,6 +170,48 @@ export interface CreateCustomerRequest {
   addresses?: CustomerAddressRequest[] | null;
 }
 
+export interface CreateEstimateRequest {
+  customerId?: string;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  /** @nullable */
+  expiresOn?: string | null;
+  taxRate?: number;
+  discountAmount?: number;
+  /** @nullable */
+  notes?: string | null;
+  billingAddress?: EstimateAddressRequest;
+  /** @nullable */
+  lineItems?: EstimateLineItemRequest[] | null;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  internalNotes?: string | null;
+  /** @nullable */
+  depositType?: string | null;
+  depositValue?: number;
+}
+
+export interface CreateExpenseRequest {
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  description?: string | null;
+  amount?: number;
+  expenseDate?: string;
+  /** @nullable */
+  jobId?: string | null;
+  /** @nullable */
+  invoiceId?: string | null;
+  /** @nullable */
+  vendorName?: string | null;
+  /** @nullable */
+  referenceNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface CreateInvoiceRequest {
   customerId?: string;
   /** @nullable */
@@ -170,6 +238,8 @@ export interface CreateJobRequest {
   /** @nullable */
   sourceLeadId?: string | null;
   /** @nullable */
+  sourceEstimateId?: string | null;
+  /** @nullable */
   title?: string | null;
   /** @nullable */
   jobType?: string | null;
@@ -194,6 +264,32 @@ export interface CreateJobRequest {
   assignments?: JobAssignmentRequest[] | null;
   /** @nullable */
   checklistItems?: JobChecklistItemRequest[] | null;
+  /** @nullable */
+  lineItems?: JobLineItemRequest[] | null;
+}
+
+export interface CreateServiceCatalogItemRequest {
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  defaultUnitPrice?: number | null;
+}
+
+export interface CreateWorkerRequest {
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  role?: string | null;
 }
 
 export interface CustomerAddressRequest {
@@ -378,6 +474,34 @@ export interface DeleteCustomerResponseApiResponse {
   data?: DeleteCustomerResponse;
 }
 
+export interface DeleteEstimateAttachmentResponse {
+  attachmentId?: string;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface DeleteEstimateAttachmentResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: DeleteEstimateAttachmentResponse;
+}
+
+export interface DeleteEstimateResponse {
+  estimateId?: string;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface DeleteEstimateResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: DeleteEstimateResponse;
+}
+
 export interface DeleteInvoiceResponse {
   invoiceId?: string;
   /** @nullable */
@@ -432,6 +556,182 @@ export interface DeleteJobResponseApiResponse {
   /** @nullable */
   message?: string | null;
   data?: DeleteJobResponse;
+}
+
+export interface DeleteServiceCatalogItemResponse {
+  id?: string;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface DeleteServiceCatalogItemResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: DeleteServiceCatalogItemResponse;
+}
+
+export interface EstimateAddressRequest {
+  /** @nullable */
+  line1?: string | null;
+  /** @nullable */
+  line2?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  stateOrProvince?: string | null;
+  /** @nullable */
+  postalCode?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+}
+
+export interface EstimateAddressResponse {
+  /** @nullable */
+  line1?: string | null;
+  /** @nullable */
+  line2?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  stateOrProvince?: string | null;
+  /** @nullable */
+  postalCode?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+}
+
+export interface EstimateAttachmentResponse {
+  id?: string;
+  /** @nullable */
+  fileName?: string | null;
+  /** @nullable */
+  storagePath?: string | null;
+  /** @nullable */
+  contentType?: string | null;
+  fileSizeBytes?: number;
+  createdAt?: string;
+}
+
+export interface EstimateAttachmentResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: EstimateAttachmentResponse;
+}
+
+export interface EstimateCustomerSummaryResponse {
+  id?: string;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  mobilePhone?: string | null;
+}
+
+export interface EstimateLineItemRequest {
+  sortOrder?: number;
+  /** @nullable */
+  serviceName?: string | null;
+  /** @nullable */
+  description?: string | null;
+  quantity?: number;
+  unitPrice?: number;
+}
+
+export interface EstimateLineItemResponse {
+  id?: string;
+  sortOrder?: number;
+  /** @nullable */
+  serviceName?: string | null;
+  /** @nullable */
+  description?: string | null;
+  quantity?: number;
+  unitPrice?: number;
+  lineTotal?: number;
+}
+
+export interface EstimateResponse {
+  id?: string;
+  businessId?: string;
+  customerId?: string;
+  /** @nullable */
+  estimateNumber?: string | null;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  /** @nullable */
+  expiresOn?: string | null;
+  taxRate?: number;
+  discountAmount?: number;
+  subtotalAmount?: number;
+  taxAmount?: number;
+  totalAmount?: number;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  customerNameSnapshot?: string | null;
+  /** @nullable */
+  customerEmailSnapshot?: string | null;
+  billingAddress?: EstimateAddressResponse;
+  customer?: EstimateCustomerSummaryResponse;
+  /** @nullable */
+  lineItems?: EstimateLineItemResponse[] | null;
+  /** @nullable */
+  publicToken?: string | null;
+  /** @nullable */
+  sentAt?: string | null;
+  /** @nullable */
+  respondedAt?: string | null;
+  /** @nullable */
+  convertedJobId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  internalNotes?: string | null;
+  /** @nullable */
+  depositType?: string | null;
+  depositValue?: number;
+  depositAmount?: number;
+  /** @nullable */
+  attachments?: EstimateAttachmentResponse[] | null;
+}
+
+export interface EstimateResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: EstimateResponse;
+}
+
+export interface EstimateResponsePagedResponse {
+  /** @nullable */
+  data?: EstimateResponse[] | null;
+  totalRecords?: number;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
+export interface EstimateResponsePagedResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: EstimateResponsePagedResponse;
 }
 
 export interface ForgotPasswordRequest {
@@ -569,6 +869,8 @@ export interface InvoiceResponse {
   customer?: InvoiceCustomerSummaryResponse;
   /** @nullable */
   lineItems?: InvoiceLineItemResponse[] | null;
+  /** @nullable */
+  payments?: PaymentRecordResponse[] | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -679,6 +981,28 @@ export interface JobCustomerSummaryResponse {
   email?: string | null;
 }
 
+export interface JobLineItemRequest {
+  sortOrder?: number;
+  /** @nullable */
+  serviceName?: string | null;
+  /** @nullable */
+  description?: string | null;
+  quantity?: number;
+  unitPrice?: number;
+}
+
+export interface JobLineItemResponse {
+  id?: string;
+  sortOrder?: number;
+  /** @nullable */
+  serviceName?: string | null;
+  /** @nullable */
+  description?: string | null;
+  quantity?: number;
+  unitPrice?: number;
+  lineTotal?: number;
+}
+
 export interface JobNoteResponse {
   id?: string;
   /** @nullable */
@@ -726,6 +1050,8 @@ export interface JobResponse {
   /** @nullable */
   sourceLeadId?: string | null;
   /** @nullable */
+  sourceEstimateId?: string | null;
+  /** @nullable */
   jobNumber?: string | null;
   /** @nullable */
   title?: string | null;
@@ -749,6 +1075,8 @@ export interface JobResponse {
   /** @nullable */
   description?: string | null;
   customer?: JobCustomerSummaryResponse;
+  /** @nullable */
+  lineItems?: JobLineItemResponse[] | null;
   /** @nullable */
   assignments?: JobAssignmentResponse[] | null;
   /** @nullable */
@@ -792,6 +1120,101 @@ export interface LoginRequest {
   password?: string | null;
 }
 
+export interface PaymentRecordResponse {
+  id?: string;
+  amount?: number;
+  /** @nullable */
+  method?: string | null;
+  paidAt?: string;
+  /** @nullable */
+  referenceNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  isStripePayment?: boolean;
+  createdAt?: string;
+}
+
+export interface PaymentResponse {
+  id?: string;
+  invoiceId?: string;
+  amount?: number;
+  /** @nullable */
+  method?: string | null;
+  paidAt?: string;
+  /** @nullable */
+  referenceNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  isStripePayment?: boolean;
+  createdAt?: string;
+}
+
+export interface PaymentResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: PaymentResponse;
+}
+
+export interface PaymentResponseListApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  /** @nullable */
+  data?: PaymentResponse[] | null;
+}
+
+export interface PublicEstimateResponse {
+  id?: string;
+  /** @nullable */
+  estimateNumber?: string | null;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  /** @nullable */
+  expiresOn?: string | null;
+  /** @nullable */
+  businessName?: string | null;
+  /** @nullable */
+  customerNameSnapshot?: string | null;
+  subtotalAmount?: number;
+  discountAmount?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  totalAmount?: number;
+  /** @nullable */
+  currency?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  lineItems?: EstimateLineItemResponse[] | null;
+  canRespond?: boolean;
+  /** @nullable */
+  title?: string | null;
+  depositAmount?: number;
+}
+
+export interface PublicEstimateResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: PublicEstimateResponse;
+}
+
+export interface RecordPaymentRequest {
+  amount?: number;
+  /** @nullable */
+  method?: string | null;
+  paidAt?: string;
+  /** @nullable */
+  referenceNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface ReorderJobChecklistRequest {
   /** @nullable */
   checklistItemIds?: string[] | null;
@@ -805,6 +1228,50 @@ export interface ReplaceJobAssignmentsRequest {
 export interface ReplaceJobChecklistRequest {
   /** @nullable */
   checklistItems?: JobChecklistItemRequest[] | null;
+}
+
+export interface ReplaceJobLineItemsRequest {
+  /** @nullable */
+  lineItems?: JobLineItemRequest[] | null;
+}
+
+export interface ServiceCatalogItemResponse {
+  id?: string;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  defaultUnitPrice?: number | null;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ServiceCatalogItemResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: ServiceCatalogItemResponse;
+}
+
+export interface ServiceCatalogItemResponsePagedResponse {
+  /** @nullable */
+  data?: ServiceCatalogItemResponse[] | null;
+  totalRecords?: number;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
+export interface ServiceCatalogItemResponsePagedResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: ServiceCatalogItemResponsePagedResponse;
 }
 
 export interface SignupRequest {
@@ -836,6 +1303,37 @@ export interface StateProvinceLookupResponseListApiResponse {
   data?: StateProvinceLookupResponse[] | null;
 }
 
+export interface StripeOnboardingResult {
+  alreadyConnected?: boolean;
+  /** @nullable */
+  onboardingUrl?: string | null;
+  /** @nullable */
+  accountId?: string | null;
+}
+
+export interface StripeOnboardingResultApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: StripeOnboardingResult;
+}
+
+export interface StripeStatusResult {
+  isConnected?: boolean;
+  onboardingComplete?: boolean;
+  /** @nullable */
+  accountId?: string | null;
+}
+
+export interface StripeStatusResultApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: StripeStatusResult;
+}
+
 export interface UpdateCustomerRequest {
   /** @nullable */
   type?: string | null;
@@ -860,6 +1358,55 @@ export interface UpdateCustomerRequest {
   billingSameAsService?: boolean;
   /** @nullable */
   addresses?: CustomerAddressRequest[] | null;
+}
+
+export interface UpdateEstimateRequest {
+  customerId?: string;
+  /** @nullable */
+  status?: string | null;
+  issuedOn?: string;
+  /** @nullable */
+  expiresOn?: string | null;
+  taxRate?: number;
+  discountAmount?: number;
+  /** @nullable */
+  notes?: string | null;
+  billingAddress?: EstimateAddressRequest;
+  /** @nullable */
+  lineItems?: EstimateLineItemRequest[] | null;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  internalNotes?: string | null;
+  /** @nullable */
+  depositType?: string | null;
+  depositValue?: number;
+}
+
+export interface UpdateEstimateStatusRequest {
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  convertedJobId?: string | null;
+}
+
+export interface UpdateExpenseRequest {
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  description?: string | null;
+  amount?: number;
+  expenseDate?: string;
+  /** @nullable */
+  jobId?: string | null;
+  /** @nullable */
+  invoiceId?: string | null;
+  /** @nullable */
+  vendorName?: string | null;
+  /** @nullable */
+  referenceNumber?: string | null;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface UpdateInvoiceRequest {
@@ -898,6 +1445,8 @@ export interface UpdateJobRequest {
   /** @nullable */
   sourceLeadId?: string | null;
   /** @nullable */
+  sourceEstimateId?: string | null;
+  /** @nullable */
   title?: string | null;
   /** @nullable */
   jobType?: string | null;
@@ -922,6 +1471,8 @@ export interface UpdateJobRequest {
   assignments?: JobAssignmentRequest[] | null;
   /** @nullable */
   checklistItems?: JobChecklistItemRequest[] | null;
+  /** @nullable */
+  lineItems?: JobLineItemRequest[] | null;
 }
 
 export interface UpdateJobStatusRequest {
@@ -932,6 +1483,89 @@ export interface UpdateJobStatusRequest {
   /** @nullable */
   actualEndAt?: string | null;
 }
+
+export interface UpdateServiceCatalogItemRequest {
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  category?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  defaultUnitPrice?: number | null;
+  isActive?: boolean;
+}
+
+export interface UpdateWorkerRequest {
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  role?: string | null;
+}
+
+export interface WorkerResponse {
+  id?: string;
+  /** @nullable */
+  membershipId?: string | null;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  role?: string | null;
+  isActive?: boolean;
+  createdAt?: string;
+}
+
+export interface WorkerResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: WorkerResponse;
+}
+
+export interface WorkerResponseListApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  /** @nullable */
+  data?: WorkerResponse[] | null;
+}
+
+export type PostApiEstimatesGetAllEstimatesParams = {
+PageNumber?: number;
+PageSize?: number;
+Search?: string;
+CustomerId?: string;
+Status?: string;
+IssuedFrom?: string;
+IssuedTo?: string;
+};
+
+export type PostApiEstimatesAddAttachmentEstimateIdBody = {
+  File?: Blob;
+};
+
+export type GetApiExpensesGetAllParams = {
+jobId?: string;
+category?: string;
+dateFrom?: string;
+dateTo?: string;
+};
 
 export type PostApiInvoicesGetAllInvoicesParams = {
 PageNumber?: number;
@@ -967,6 +1601,19 @@ export type PostApiJobsAddPhotoJobIdBody = {
 export type GetApiLocationsStatesParams = {
 countryId?: string;
 countryCode?: string;
+};
+
+export type PostApiServiceCatalogGetAllItemsParams = {
+PageNumber?: number;
+PageSize?: number;
+Search?: string;
+Category?: string;
+IsActive?: boolean;
+};
+
+export type GetApiWorkersGetAllParams = {
+IsActive?: boolean;
+Search?: string;
 };
 
 export const getFieldoreAPI = () => {
@@ -1055,6 +1702,147 @@ const deleteApiCustomersDeleteCustomerCustomerId = <TData = AxiosResponse<Delete
  ): Promise<TData> => {
     return axios.delete(
       `/api/Customers/delete-customer/${customerId}`,options
+    );
+  }
+
+const postApiEstimatesCreateEstimate = <TData = AxiosResponse<EstimateResponseApiResponse>>(
+    createEstimateRequest: CreateEstimateRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Estimates/create-estimate`,
+      createEstimateRequest,options
+    );
+  }
+
+const postApiEstimatesGetAllEstimates = <TData = AxiosResponse<EstimateResponsePagedResponseApiResponse>>(
+    params?: PostApiEstimatesGetAllEstimatesParams, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Estimates/getAll-estimates`,undefined,{
+    ...options,
+        params: {...params, ...options?.params},}
+    );
+  }
+
+const getApiEstimatesGetByIdEstimateId = <TData = AxiosResponse<EstimateResponseApiResponse>>(
+    estimateId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Estimates/getById/${estimateId}`,options
+    );
+  }
+
+const putApiEstimatesUpdateEstimateEstimateId = <TData = AxiosResponse<EstimateResponseApiResponse>>(
+    estimateId: string,
+    updateEstimateRequest: UpdateEstimateRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/Estimates/update-estimate/${estimateId}`,
+      updateEstimateRequest,options
+    );
+  }
+
+const patchApiEstimatesUpdateStatusEstimateId = <TData = AxiosResponse<EstimateResponseApiResponse>>(
+    estimateId: string,
+    updateEstimateStatusRequest: UpdateEstimateStatusRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.patch(
+      `/api/Estimates/update-status/${estimateId}`,
+      updateEstimateStatusRequest,options
+    );
+  }
+
+const postApiEstimatesSendEstimateId = <TData = AxiosResponse<EstimateResponseApiResponse>>(
+    estimateId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Estimates/send/${estimateId}`,undefined,options
+    );
+  }
+
+const postApiEstimatesConvertToJobEstimateId = <TData = AxiosResponse<ConvertEstimateToJobResponseApiResponse>>(
+    estimateId: string,
+    convertEstimateToJobRequest: ConvertEstimateToJobRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Estimates/convert-to-job/${estimateId}`,
+      convertEstimateToJobRequest,options
+    );
+  }
+
+const deleteApiEstimatesDeleteEstimateEstimateId = <TData = AxiosResponse<DeleteEstimateResponseApiResponse>>(
+    estimateId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.delete(
+      `/api/Estimates/delete-estimate/${estimateId}`,options
+    );
+  }
+
+const postApiEstimatesAddAttachmentEstimateId = <TData = AxiosResponse<EstimateAttachmentResponseApiResponse>>(
+    estimateId: string,
+    postApiEstimatesAddAttachmentEstimateIdBody: PostApiEstimatesAddAttachmentEstimateIdBody, options?: AxiosRequestConfig
+ ): Promise<TData> => {const formData = new FormData();
+if(postApiEstimatesAddAttachmentEstimateIdBody.File !== undefined) {
+ formData.append(`File`, postApiEstimatesAddAttachmentEstimateIdBody.File)
+ }
+
+    return axios.post(
+      `/api/Estimates/add-attachment/${estimateId}`,
+      formData,options
+    );
+  }
+
+const deleteApiEstimatesDeleteAttachmentEstimateIdAttachmentId = <TData = AxiosResponse<DeleteEstimateAttachmentResponseApiResponse>>(
+    estimateId: string,
+    attachmentId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.delete(
+      `/api/Estimates/delete-attachment/${estimateId}/${attachmentId}`,options
+    );
+  }
+
+const getApiExpensesGetAll = <TData = AxiosResponse<void>>(
+    params?: GetApiExpensesGetAllParams, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Expenses/getAll`,{
+    ...options,
+        params: {...params, ...options?.params},}
+    );
+  }
+
+const getApiExpensesSummary = <TData = AxiosResponse<void>>(
+     options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Expenses/summary`,options
+    );
+  }
+
+const postApiExpensesCreate = <TData = AxiosResponse<void>>(
+    createExpenseRequest: CreateExpenseRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Expenses/create`,
+      createExpenseRequest,options
+    );
+  }
+
+const putApiExpensesUpdateExpenseId = <TData = AxiosResponse<void>>(
+    expenseId: string,
+    updateExpenseRequest: UpdateExpenseRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/Expenses/update/${expenseId}`,
+      updateExpenseRequest,options
+    );
+  }
+
+const deleteApiExpensesExpenseId = <TData = AxiosResponse<void>>(
+    expenseId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.delete(
+      `/api/Expenses/${expenseId}`,options
     );
   }
 
@@ -1196,6 +1984,16 @@ const putApiJobsReplaceChecklistJobId = <TData = AxiosResponse<JobResponseApiRes
     );
   }
 
+const putApiJobsReplaceLineItemsJobId = <TData = AxiosResponse<JobResponseApiResponse>>(
+    jobId: string,
+    replaceJobLineItemsRequest: ReplaceJobLineItemsRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/Jobs/replace-line-items/${jobId}`,
+      replaceJobLineItemsRequest,options
+    );
+  }
+
 const postApiJobsAddNoteJobId = <TData = AxiosResponse<JobNoteResponseApiResponse>>(
     jobId: string,
     addJobNoteRequest: AddJobNoteRequest, options?: AxiosRequestConfig
@@ -1283,7 +2081,220 @@ const getApiLocationsStates = <TData = AxiosResponse<StateProvinceLookupResponse
     );
   }
 
-return {postApiAuthLogin,postApiAuthSignup,postApiAuthBusinessRegister,getApiAuthGetBusinessDetails,postApiAuthForgotPassword,postApiCustomersCreateCustomer,postApiCustomersGetAllCustomers,getApiCustomersGetByIdCustomerId,putApiCustomersUpdateCustomerCustomerId,deleteApiCustomersDeleteCustomerCustomerId,getHealthDb,postApiInvoicesCreateInvoice,postApiInvoicesGetAllInvoices,getApiInvoicesGetByIdInvoiceId,putApiInvoicesUpdateInvoiceInvoiceId,patchApiInvoicesUpdateStatusInvoiceId,deleteApiInvoicesDeleteInvoiceInvoiceId,postApiJobsCreateJob,postApiJobsGetAllJobs,getApiJobsGetByIdJobId,putApiJobsUpdateJobJobId,deleteApiJobsDeleteJobJobId,patchApiJobsUpdateStatusJobId,putApiJobsReplaceAssignmentsJobId,putApiJobsReplaceChecklistJobId,postApiJobsAddNoteJobId,putApiJobsEditNoteJobIdNoteId,deleteApiJobsDeleteNoteJobIdNoteId,postApiJobsAddPhotoJobId,deleteApiJobsDeletePhotoJobIdPhotoId,putApiJobsReorderChecklistJobId,getApiLocationsCountries,getApiLocationsStates}};
+const postApiPaymentsRecordInvoiceId = <TData = AxiosResponse<PaymentResponseApiResponse>>(
+    invoiceId: string,
+    recordPaymentRequest: RecordPaymentRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Payments/record/${invoiceId}`,
+      recordPaymentRequest,options
+    );
+  }
+
+const getApiPaymentsInvoiceInvoiceId = <TData = AxiosResponse<PaymentResponseListApiResponse>>(
+    invoiceId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Payments/invoice/${invoiceId}`,options
+    );
+  }
+
+const deleteApiPaymentsInvoiceIdPaymentId = <TData = AxiosResponse<PaymentResponseApiResponse>>(
+    invoiceId: string,
+    paymentId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.delete(
+      `/api/Payments/${invoiceId}/${paymentId}`,options
+    );
+  }
+
+const getApiPublicQuotesToken = <TData = AxiosResponse<PublicEstimateResponseApiResponse>>(
+    token: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/public/quotes/${token}`,options
+    );
+  }
+
+const postApiPublicQuotesTokenAccept = <TData = AxiosResponse<PublicEstimateResponseApiResponse>>(
+    token: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/public/quotes/${token}/accept`,undefined,options
+    );
+  }
+
+const postApiPublicQuotesTokenReject = <TData = AxiosResponse<PublicEstimateResponseApiResponse>>(
+    token: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/public/quotes/${token}/reject`,undefined,options
+    );
+  }
+
+const getQuoteToken = <TData = AxiosResponse<void>>(
+    token: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/quote/${token}`,options
+    );
+  }
+
+const postQuoteTokenAccept = <TData = AxiosResponse<void>>(
+    token: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/quote/${token}/accept`,undefined,options
+    );
+  }
+
+const postQuoteTokenReject = <TData = AxiosResponse<void>>(
+    token: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/quote/${token}/reject`,undefined,options
+    );
+  }
+
+const postApiServiceCatalogCreateItem = <TData = AxiosResponse<ServiceCatalogItemResponseApiResponse>>(
+    createServiceCatalogItemRequest: CreateServiceCatalogItemRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/ServiceCatalog/create-item`,
+      createServiceCatalogItemRequest,options
+    );
+  }
+
+const postApiServiceCatalogGetAllItems = <TData = AxiosResponse<ServiceCatalogItemResponsePagedResponseApiResponse>>(
+    params?: PostApiServiceCatalogGetAllItemsParams, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/ServiceCatalog/getAll-items`,undefined,{
+    ...options,
+        params: {...params, ...options?.params},}
+    );
+  }
+
+const getApiServiceCatalogGetByIdItemId = <TData = AxiosResponse<ServiceCatalogItemResponseApiResponse>>(
+    itemId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/ServiceCatalog/getById/${itemId}`,options
+    );
+  }
+
+const putApiServiceCatalogUpdateItemItemId = <TData = AxiosResponse<ServiceCatalogItemResponseApiResponse>>(
+    itemId: string,
+    updateServiceCatalogItemRequest: UpdateServiceCatalogItemRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/ServiceCatalog/update-item/${itemId}`,
+      updateServiceCatalogItemRequest,options
+    );
+  }
+
+const deleteApiServiceCatalogDeleteItemItemId = <TData = AxiosResponse<DeleteServiceCatalogItemResponseApiResponse>>(
+    itemId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.delete(
+      `/api/ServiceCatalog/delete-item/${itemId}`,options
+    );
+  }
+
+const getApiStripeStatus = <TData = AxiosResponse<StripeStatusResultApiResponse>>(
+     options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/stripe/status`,options
+    );
+  }
+
+const postApiStripeConnectOnboarding = <TData = AxiosResponse<StripeOnboardingResultApiResponse>>(
+     options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/stripe/connect/onboarding`,undefined,options
+    );
+  }
+
+const getApiStripeConnectReturn = <TData = AxiosResponse<void>>(
+     options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/stripe/connect/return`,options
+    );
+  }
+
+const getApiStripeConnectRefresh = <TData = AxiosResponse<void>>(
+     options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/stripe/connect/refresh`,options
+    );
+  }
+
+const postApiStripeWebhook = <TData = AxiosResponse<void>>(
+     options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/stripe/webhook`,undefined,options
+    );
+  }
+
+const postApiStripeInvoiceTokenCheckout = <TData = AxiosResponse<void>>(
+    token: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/stripe/invoice/${token}/checkout`,undefined,options
+    );
+  }
+
+const getApiWorkersGetAll = <TData = AxiosResponse<WorkerResponseListApiResponse>>(
+    params?: GetApiWorkersGetAllParams, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Workers/getAll`,{
+    ...options,
+        params: {...params, ...options?.params},}
+    );
+  }
+
+const getApiWorkersGetAssignable = <TData = AxiosResponse<WorkerResponseListApiResponse>>(
+     options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Workers/getAssignable`,options
+    );
+  }
+
+const postApiWorkersCreate = <TData = AxiosResponse<WorkerResponseApiResponse>>(
+    createWorkerRequest: CreateWorkerRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Workers/create`,
+      createWorkerRequest,options
+    );
+  }
+
+const putApiWorkersUpdateWorkerId = <TData = AxiosResponse<WorkerResponseApiResponse>>(
+    workerId: string,
+    updateWorkerRequest: UpdateWorkerRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/Workers/update/${workerId}`,
+      updateWorkerRequest,options
+    );
+  }
+
+const putApiWorkersDeactivateWorkerId = <TData = AxiosResponse<WorkerResponseApiResponse>>(
+    workerId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.put(
+      `/api/Workers/deactivate/${workerId}`,undefined,options
+    );
+  }
+
+return {postApiAuthLogin,postApiAuthSignup,postApiAuthBusinessRegister,getApiAuthGetBusinessDetails,postApiAuthForgotPassword,postApiCustomersCreateCustomer,postApiCustomersGetAllCustomers,getApiCustomersGetByIdCustomerId,putApiCustomersUpdateCustomerCustomerId,deleteApiCustomersDeleteCustomerCustomerId,postApiEstimatesCreateEstimate,postApiEstimatesGetAllEstimates,getApiEstimatesGetByIdEstimateId,putApiEstimatesUpdateEstimateEstimateId,patchApiEstimatesUpdateStatusEstimateId,postApiEstimatesSendEstimateId,postApiEstimatesConvertToJobEstimateId,deleteApiEstimatesDeleteEstimateEstimateId,postApiEstimatesAddAttachmentEstimateId,deleteApiEstimatesDeleteAttachmentEstimateIdAttachmentId,getApiExpensesGetAll,getApiExpensesSummary,postApiExpensesCreate,putApiExpensesUpdateExpenseId,deleteApiExpensesExpenseId,getHealthDb,postApiInvoicesCreateInvoice,postApiInvoicesGetAllInvoices,getApiInvoicesGetByIdInvoiceId,putApiInvoicesUpdateInvoiceInvoiceId,patchApiInvoicesUpdateStatusInvoiceId,deleteApiInvoicesDeleteInvoiceInvoiceId,postApiJobsCreateJob,postApiJobsGetAllJobs,getApiJobsGetByIdJobId,putApiJobsUpdateJobJobId,deleteApiJobsDeleteJobJobId,patchApiJobsUpdateStatusJobId,putApiJobsReplaceAssignmentsJobId,putApiJobsReplaceChecklistJobId,putApiJobsReplaceLineItemsJobId,postApiJobsAddNoteJobId,putApiJobsEditNoteJobIdNoteId,deleteApiJobsDeleteNoteJobIdNoteId,postApiJobsAddPhotoJobId,deleteApiJobsDeletePhotoJobIdPhotoId,putApiJobsReorderChecklistJobId,getApiLocationsCountries,getApiLocationsStates,postApiPaymentsRecordInvoiceId,getApiPaymentsInvoiceInvoiceId,deleteApiPaymentsInvoiceIdPaymentId,getApiPublicQuotesToken,postApiPublicQuotesTokenAccept,postApiPublicQuotesTokenReject,getQuoteToken,postQuoteTokenAccept,postQuoteTokenReject,postApiServiceCatalogCreateItem,postApiServiceCatalogGetAllItems,getApiServiceCatalogGetByIdItemId,putApiServiceCatalogUpdateItemItemId,deleteApiServiceCatalogDeleteItemItemId,getApiStripeStatus,postApiStripeConnectOnboarding,getApiStripeConnectReturn,getApiStripeConnectRefresh,postApiStripeWebhook,postApiStripeInvoiceTokenCheckout,getApiWorkersGetAll,getApiWorkersGetAssignable,postApiWorkersCreate,putApiWorkersUpdateWorkerId,putApiWorkersDeactivateWorkerId}};
 export type PostApiAuthLoginResult = AxiosResponse<AuthResponseApiResponse>
 export type PostApiAuthSignupResult = AxiosResponse<AuthResponseApiResponse>
 export type PostApiAuthBusinessRegisterResult = AxiosResponse<AuthResponseApiResponse>
@@ -1294,6 +2305,21 @@ export type PostApiCustomersGetAllCustomersResult = AxiosResponse<CustomerRespon
 export type GetApiCustomersGetByIdCustomerIdResult = AxiosResponse<CustomerResponseApiResponse>
 export type PutApiCustomersUpdateCustomerCustomerIdResult = AxiosResponse<CustomerResponseApiResponse>
 export type DeleteApiCustomersDeleteCustomerCustomerIdResult = AxiosResponse<DeleteCustomerResponseApiResponse>
+export type PostApiEstimatesCreateEstimateResult = AxiosResponse<EstimateResponseApiResponse>
+export type PostApiEstimatesGetAllEstimatesResult = AxiosResponse<EstimateResponsePagedResponseApiResponse>
+export type GetApiEstimatesGetByIdEstimateIdResult = AxiosResponse<EstimateResponseApiResponse>
+export type PutApiEstimatesUpdateEstimateEstimateIdResult = AxiosResponse<EstimateResponseApiResponse>
+export type PatchApiEstimatesUpdateStatusEstimateIdResult = AxiosResponse<EstimateResponseApiResponse>
+export type PostApiEstimatesSendEstimateIdResult = AxiosResponse<EstimateResponseApiResponse>
+export type PostApiEstimatesConvertToJobEstimateIdResult = AxiosResponse<ConvertEstimateToJobResponseApiResponse>
+export type DeleteApiEstimatesDeleteEstimateEstimateIdResult = AxiosResponse<DeleteEstimateResponseApiResponse>
+export type PostApiEstimatesAddAttachmentEstimateIdResult = AxiosResponse<EstimateAttachmentResponseApiResponse>
+export type DeleteApiEstimatesDeleteAttachmentEstimateIdAttachmentIdResult = AxiosResponse<DeleteEstimateAttachmentResponseApiResponse>
+export type GetApiExpensesGetAllResult = AxiosResponse<void>
+export type GetApiExpensesSummaryResult = AxiosResponse<void>
+export type PostApiExpensesCreateResult = AxiosResponse<void>
+export type PutApiExpensesUpdateExpenseIdResult = AxiosResponse<void>
+export type DeleteApiExpensesExpenseIdResult = AxiosResponse<void>
 export type GetHealthDbResult = AxiosResponse<void>
 export type PostApiInvoicesCreateInvoiceResult = AxiosResponse<InvoiceResponseApiResponse>
 export type PostApiInvoicesGetAllInvoicesResult = AxiosResponse<InvoiceResponsePagedResponseApiResponse>
@@ -1309,6 +2335,7 @@ export type DeleteApiJobsDeleteJobJobIdResult = AxiosResponse<DeleteJobResponseA
 export type PatchApiJobsUpdateStatusJobIdResult = AxiosResponse<JobResponseApiResponse>
 export type PutApiJobsReplaceAssignmentsJobIdResult = AxiosResponse<JobResponseApiResponse>
 export type PutApiJobsReplaceChecklistJobIdResult = AxiosResponse<JobResponseApiResponse>
+export type PutApiJobsReplaceLineItemsJobIdResult = AxiosResponse<JobResponseApiResponse>
 export type PostApiJobsAddNoteJobIdResult = AxiosResponse<JobNoteResponseApiResponse>
 export type PutApiJobsEditNoteJobIdNoteIdResult = AxiosResponse<JobNoteResponseApiResponse>
 export type DeleteApiJobsDeleteNoteJobIdNoteIdResult = AxiosResponse<DeleteJobNoteResponseApiResponse>
@@ -1317,3 +2344,28 @@ export type DeleteApiJobsDeletePhotoJobIdPhotoIdResult = AxiosResponse<DeleteJob
 export type PutApiJobsReorderChecklistJobIdResult = AxiosResponse<JobResponseApiResponse>
 export type GetApiLocationsCountriesResult = AxiosResponse<CountryLookupResponseListApiResponse>
 export type GetApiLocationsStatesResult = AxiosResponse<StateProvinceLookupResponseListApiResponse>
+export type PostApiPaymentsRecordInvoiceIdResult = AxiosResponse<PaymentResponseApiResponse>
+export type GetApiPaymentsInvoiceInvoiceIdResult = AxiosResponse<PaymentResponseListApiResponse>
+export type DeleteApiPaymentsInvoiceIdPaymentIdResult = AxiosResponse<PaymentResponseApiResponse>
+export type GetApiPublicQuotesTokenResult = AxiosResponse<PublicEstimateResponseApiResponse>
+export type PostApiPublicQuotesTokenAcceptResult = AxiosResponse<PublicEstimateResponseApiResponse>
+export type PostApiPublicQuotesTokenRejectResult = AxiosResponse<PublicEstimateResponseApiResponse>
+export type GetQuoteTokenResult = AxiosResponse<void>
+export type PostQuoteTokenAcceptResult = AxiosResponse<void>
+export type PostQuoteTokenRejectResult = AxiosResponse<void>
+export type PostApiServiceCatalogCreateItemResult = AxiosResponse<ServiceCatalogItemResponseApiResponse>
+export type PostApiServiceCatalogGetAllItemsResult = AxiosResponse<ServiceCatalogItemResponsePagedResponseApiResponse>
+export type GetApiServiceCatalogGetByIdItemIdResult = AxiosResponse<ServiceCatalogItemResponseApiResponse>
+export type PutApiServiceCatalogUpdateItemItemIdResult = AxiosResponse<ServiceCatalogItemResponseApiResponse>
+export type DeleteApiServiceCatalogDeleteItemItemIdResult = AxiosResponse<DeleteServiceCatalogItemResponseApiResponse>
+export type GetApiStripeStatusResult = AxiosResponse<StripeStatusResultApiResponse>
+export type PostApiStripeConnectOnboardingResult = AxiosResponse<StripeOnboardingResultApiResponse>
+export type GetApiStripeConnectReturnResult = AxiosResponse<void>
+export type GetApiStripeConnectRefreshResult = AxiosResponse<void>
+export type PostApiStripeWebhookResult = AxiosResponse<void>
+export type PostApiStripeInvoiceTokenCheckoutResult = AxiosResponse<void>
+export type GetApiWorkersGetAllResult = AxiosResponse<WorkerResponseListApiResponse>
+export type GetApiWorkersGetAssignableResult = AxiosResponse<WorkerResponseListApiResponse>
+export type PostApiWorkersCreateResult = AxiosResponse<WorkerResponseApiResponse>
+export type PutApiWorkersUpdateWorkerIdResult = AxiosResponse<WorkerResponseApiResponse>
+export type PutApiWorkersDeactivateWorkerIdResult = AxiosResponse<WorkerResponseApiResponse>

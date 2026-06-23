@@ -1,5 +1,6 @@
 import {
   CountryLookupResponse,
+  CreateJobRequest,
   JobResponse,
   StateProvinceLookupResponse,
   getFieldoreAPI,
@@ -44,6 +45,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useLoader } from '@/src/context/LoaderContext';
 import { getCustomerDisplayName, getCustomersApi } from '@/src/services/customerService';
+import { getEstimateByIdApi, markEstimateConvertedApi } from '@/src/services/estimateService';
 import { createJobApi, getJobByIdApi, updateJobApi } from '@/src/services/jobService';
 import {
   CreateJobFormData,
@@ -450,11 +452,25 @@ const SelectionModal = ({
 );
 
 const CreateJobScreen: React.FC = () => {
-  const params = useLocalSearchParams<{ jobId?: string }>();
+  const params = useLocalSearchParams<{
+    jobId?: string;
+    prefillCustomerId?: string;
+    prefillTitle?: string;
+    fromEstimateId?: string;
+  }>();
   const editingJobId = typeof params.jobId === 'string' ? params.jobId : '';
   const isEditMode = Boolean(editingJobId);
+  const prefillCustomerId = typeof params.prefillCustomerId === 'string' ? params.prefillCustomerId : '';
+  const prefillTitle = typeof params.prefillTitle === 'string' ? params.prefillTitle : '';
+  const fromEstimateId = typeof params.fromEstimateId === 'string' ? params.fromEstimateId : '';
+  const isFromEstimate = Boolean(fromEstimateId);
   const { showLoader, hideLoader } = useLoader();
-  const [formData, setFormData] = useState<CreateJobFormData>(createInitialJobFormData());
+  const [formData, setFormData] = useState<CreateJobFormData>(() => {
+    const initial = createInitialJobFormData();
+    if (prefillCustomerId) initial.customerId = prefillCustomerId;
+    if (prefillTitle) initial.title = prefillTitle;
+    return initial;
+  });
   const [errors, setErrors] = useState<CreateJobFormErrors>({});
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
@@ -748,7 +764,32 @@ const CreateJobScreen: React.FC = () => {
         Alert.alert('Success', 'Job updated successfully.');
         router.back();
       } else {
-        const createdJob = await createJobApi(buildCreateJobPayload(formData));
+        let estimateLineItems: Array<{ sortOrder: number; serviceName: string; description?: string | null; quantity: number; unitPrice: number }> | undefined;
+        if (fromEstimateId) {
+          try {
+            const est = await getEstimateByIdApi(fromEstimateId);
+            const items = (est as any).lineItems as Array<{ serviceName?: string; description?: string | null; quantity?: number; unitPrice?: number }> | undefined;
+            if (Array.isArray(items) && items.length > 0) {
+              estimateLineItems = items.map((item, idx) => ({
+                sortOrder: idx + 1,
+                serviceName: item.serviceName || '',
+                description: item.description || null,
+                quantity: Number(item.quantity) || 1,
+                unitPrice: Number(item.unitPrice) || 0,
+              }));
+            }
+          } catch {
+            // best-effort — don't block job creation
+          }
+        }
+        const createdJob = await createJobApi({
+          ...buildCreateJobPayload(formData),
+          ...(fromEstimateId && { sourceEstimateId: fromEstimateId }),
+          ...(estimateLineItems && { lineItems: estimateLineItems }),
+        } as CreateJobRequest);
+        if (fromEstimateId && createdJob.id) {
+          markEstimateConvertedApi(fromEstimateId, createdJob.id);
+        }
         Alert.alert('Success', 'Job created successfully.');
         router.replace({
           pathname: '../Screens/JobDetailScreen',
@@ -911,6 +952,14 @@ const CreateJobScreen: React.FC = () => {
               <Text style={styles.loadingCardText}>Loading job details...</Text>
             </View>
           ) : null}
+
+          {isFromEstimate && (
+            <View style={styles.estimateBanner}>
+              <Text style={styles.estimateBannerText}>
+                Prefilled from your approved quote. Set the schedule and location below, then create the job.
+              </Text>
+            </View>
+          )}
 
           {!!errors.server && (
             <View style={styles.serverErrorBox}>
@@ -1376,6 +1425,16 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 12, fontWeight: '900', color: '#0f172a', letterSpacing: 1.8 },
   scrollContent: { paddingHorizontal: 24, paddingBottom: 140, paddingTop: 8 },
+  estimateBanner: {
+    borderRadius: 18,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 18,
+  },
+  estimateBannerText: { color: '#1d4ed8', fontSize: 13, fontWeight: '700', lineHeight: 20 },
   serverErrorBox: {
     borderRadius: 18,
     backgroundColor: '#fef2f2',

@@ -1,4 +1,5 @@
 import { BusinessDetailsResponse, BusinessRegisterRequest, getFieldoreAPI, LoginRequest } from '../api/generated'; // adjust path
+import { setActiveCurrency } from '../utils/currency';
 
 const api = getFieldoreAPI();
 
@@ -49,6 +50,10 @@ export const getBusinessDetailsApi = async (): Promise<BusinessDetailsResponse> 
     if (!result.data) {
       throw new Error('No business data found');
     }
+
+    // Cache the business currency for app-wide formatting.
+    // (Typed once the orval client is regenerated against the updated Swagger.)
+    setActiveCurrency((result.data as { currency?: string }).currency);
 
     return result.data;
   } catch (error: any) {

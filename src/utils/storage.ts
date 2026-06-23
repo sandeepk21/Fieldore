@@ -3,6 +3,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const KEYS = {
   TOKEN: 'auth_token',
   USER: 'auth_user',
+  CURRENCY: 'business_currency',
+};
+
+// ✅ Active business currency (ISO 4217 code, e.g. USD, INR, EUR)
+export const saveCurrency = async (code?: string | null) => {
+  if (code && code.trim()) {
+    await AsyncStorage.setItem(KEYS.CURRENCY, code.trim().toUpperCase());
+  }
+};
+
+export const getStoredCurrency = async (): Promise<string | null> => {
+  return await AsyncStorage.getItem(KEYS.CURRENCY);
 };
 
 // ✅ Save
@@ -26,4 +38,5 @@ export const getUser = async () => {
 export const clearAuthData = async () => {
   await AsyncStorage.removeItem(KEYS.TOKEN);
   await AsyncStorage.removeItem(KEYS.USER);
+  await AsyncStorage.removeItem(KEYS.CURRENCY);
 };

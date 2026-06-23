@@ -4,15 +4,19 @@ import {
     Briefcase,
     ChevronRight,
     CreditCard,
+    Link,
     LogOut,
     LucideIcon,
+    Receipt,
     Settings as SettingsIcon,
     ShieldCheck,
     Users,
     Zap
 } from 'lucide-react-native';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    Alert,
+    Linking,
     ScrollView,
     StyleSheet,
     Text,
@@ -21,12 +25,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { StripeStatus, getStripeStatusApi, startStripeOnboardingApi } from '@/src/services/paymentService';
+
 // --- Interfaces ---
 interface SettingsItem {
   id: string;
   icon: LucideIcon;
   label: string;
   desc: string;
+  route?: string;
 }
 
 interface SettingsGroup {
@@ -35,12 +42,48 @@ interface SettingsGroup {
 }
 
 const Settings: React.FC = () => {
+  const [stripeStatus, setStripeStatus] = useState<StripeStatus | null>(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+
+  useEffect(() => {
+    getStripeStatusApi()
+      .then(setStripeStatus)
+      .catch(() => {});
+  }, []);
+
+  const handleStripeConnect = async () => {
+    setStripeLoading(true);
+    try {
+      const result = await startStripeOnboardingApi();
+      if (result.alreadyConnected) {
+        Alert.alert('Stripe Connected', 'Your Stripe account is already connected.');
+        setStripeStatus(prev => prev ? { ...prev, isConnected: true } : null);
+        return;
+      }
+      if (result.onboardingUrl) {
+        await Linking.openURL(result.onboardingUrl);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to start Stripe onboarding.');
+    } finally {
+      setStripeLoading(false);
+    }
+  };
+
+  const stripeDesc = stripeStatus?.onboardingComplete
+    ? 'Connected · Stripe Express'
+    : stripeStatus?.isConnected
+    ? 'Onboarding incomplete'
+    : 'Connect Stripe to accept online payments';
+
   const settingsGroups: SettingsGroup[] = [
     {
       label: "BUSINESS & TEAM",
       items: [
-        { id: 'users', icon: Users, label: "Users & Team", desc: "Manage permissions and staff" },
-        { id: 'services', icon: Briefcase, label: "Services", desc: "Your trade categories and rates" },
+        { id: 'users', icon: Users, label: "Users & Team", desc: "Manage permissions and staff", route: "../Screens/TeamScreen" },
+        { id: 'services', icon: Briefcase, label: "Service Catalog", desc: "Saved services & default prices", route: "../Screens/ServiceCatalogScreen" },
+        { id: 'expenses', icon: Receipt, label: "Expenses & Profit", desc: "Track costs and net profit", route: "../Screens/ExpenseListScreen" },
+        { id: 'stripe', icon: Link, label: "Stripe Payments", desc: stripeDesc },
       ]
     },
     {
@@ -94,22 +137,30 @@ const Settings: React.FC = () => {
               {group.items.map((item, itemIdx) => {
                 const Icon = item.icon;
                 return (
-                  <TouchableOpacity 
-                    key={item.id} 
+                  <TouchableOpacity
+                    key={item.id}
                     activeOpacity={0.7}
+                    onPress={() => {
+                      if (item.id === 'stripe') { handleStripeConnect(); return; }
+                      if (item.route) router.push(item.route as any);
+                    }}
+                    disabled={item.id === 'stripe' && stripeLoading}
                     style={[
                       styles.menuItem,
                       itemIdx !== group.items.length - 1 && styles.menuItemBorder
                     ]}
                   >
-                    <View style={styles.itemIconBox}>
-                      <Icon size={20} color="#94a3b8" />
+                    <View style={[styles.itemIconBox, item.id === 'stripe' && stripeStatus?.onboardingComplete && { backgroundColor: '#ecfdf5' }]}>
+                      <Icon size={20} color={item.id === 'stripe' && stripeStatus?.onboardingComplete ? '#059669' : '#94a3b8'} />
                     </View>
                     <View style={styles.itemTextContainer}>
                       <Text style={styles.itemLabel}>{item.label}</Text>
-                      <Text style={styles.itemDesc}>{item.desc}</Text>
+                      <Text style={[styles.itemDesc, item.id === 'stripe' && stripeStatus?.onboardingComplete && { color: '#059669' }]}>{item.desc}</Text>
                     </View>
-                    <ChevronRight size={18} color="#e2e8f0" />
+                    {item.id === 'stripe' && stripeLoading
+                      ? <View style={styles.stripeDot} />
+                      : <ChevronRight size={18} color="#e2e8f0" />
+                    }
                   </TouchableOpacity>
                 );
               })}
@@ -332,6 +383,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#2563eb',
     letterSpacing: 1,
+  },
+  stripeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94a3b8',
   },
 });
 

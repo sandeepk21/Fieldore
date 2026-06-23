@@ -1,4 +1,5 @@
 import { getToken } from '@/src/utils/storage';
+import { initCurrencyFromStorage } from '@/src/utils/currency';
 import { useEffect, useState } from 'react';
 
 export const useAuth = () => {
@@ -8,6 +9,9 @@ export const useAuth = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // Restore the last-known business currency for app-wide formatting.
+        await initCurrencyFromStorage();
+
         const token = await getToken();
 
         if (token) {

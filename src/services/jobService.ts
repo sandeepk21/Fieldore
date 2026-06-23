@@ -286,6 +286,20 @@ export const reorderJobChecklistApi = async (
   }
 };
 
+export const replaceJobLineItemsApi = async (
+  jobId: string,
+  lineItems: Array<{ sortOrder: number; serviceName: string; description?: string | null; quantity: number; unitPrice: number }>
+): Promise<JobResponse> => {
+  try {
+    const response = await apiClient.put(`/api/Jobs/replace-line-items/${jobId}`, { lineItems });
+    const result = response.data as { success?: boolean; message?: string | null; data?: JobResponse };
+    if (!result.success || !result.data) throw new Error(result.message || 'Failed to update line items');
+    return normalizeJobResponse(result.data);
+  } catch (error: any) {
+    throw new Error(getApiErrorMessage(error, 'Something went wrong while updating line items'));
+  }
+};
+
 export const getJobDisplayTitle = (job?: JobResponse | null) =>
   job?.title?.trim() || job?.jobNumber?.trim() || 'Untitled Job';
 

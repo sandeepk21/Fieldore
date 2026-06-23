@@ -3,21 +3,28 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
+  BookOpen,
   Calendar,
   Camera,
   Check,
   CheckCircle2,
   ChevronLeft,
   Clock,
+  FileText,
   Images,
   Mail,
   MapPin,
   MessageSquare,
   MoreVertical,
+  Package,
   Phone,
   Play,
   Plus,
+  Search,
+  Shield,
   Trash2,
+  UserCheck,
+  Users,
   X,
 } from 'lucide-react-native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -39,6 +46,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 
 import {
   CountryLookupResponse,
@@ -46,6 +54,7 @@ import {
   JobPhotoResponse,
   JobResponse,
   PostApiJobsAddPhotoJobIdBody,
+  ServiceCatalogItemResponse,
   StateProvinceLookupResponse,
   getFieldoreAPI,
 } from '@/src/api/generated';
@@ -62,10 +71,19 @@ import {
   getJobDisplayTitle,
   getJobInitials,
   reorderJobChecklistApi,
+  replaceJobAssignmentsApi,
   replaceJobChecklistApi,
+  replaceJobLineItemsApi,
   updateJobApi,
   updateJobStatusApi,
 } from '@/src/services/jobService';
+import { getServiceCatalogApi } from '@/src/services/serviceCatalogService';
+import {
+  WorkerResponse,
+  formatWorkerRoleLabel,
+  getAssignableWorkersApi,
+  getWorkerInitials,
+} from '@/src/services/workerService';
 import {
   DURATION_OPTIONS,
   JOB_PRIORITY_OPTIONS,
@@ -75,7 +93,17 @@ import {
   JobStatus,
 } from '@/src/utils/jobValidation';
 
-type TabType = 'Checklist' | 'Photos' | 'Notes';
+type TabType = 'Checklist' | 'Items' | 'Photos' | 'Notes';
+
+type JobLineItem = {
+  id?: string;
+  sortOrder?: number;
+  serviceName: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal?: number;
+};
 type ActiveSheet =
   | 'editJob'
   | 'jobType'
@@ -87,6 +115,7 @@ type ActiveSheet =
   | 'time'
   | 'duration'
   | 'editNote'
+  | 'quickStatus'
   | null;
 type TimeParts = {
   hour12: number;
@@ -101,6 +130,13 @@ type PreviewPhotoState = {
 };
 
 const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+const STATUS_COLORS: Record<string, string> = {
+  Scheduled: '#f59e0b',
+  'In Progress': '#2563eb',
+  Completed: '#10b981',
+  Cancelled: '#dc2626',
+};
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, index) => index * 5);
 const DRAG_STEP = 44;
@@ -275,7 +311,7 @@ const JobDetailSkeleton = () => (
   <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollPadding}>
     <View style={styles.mapSection}>
       <View style={styles.mapPinContainer}>
-        <View style={styles.mapPulse} />
+        <View style={styles.mapGlowOuter} />
         <View style={styles.mapIconBox} />
       </View>
     </View>
@@ -548,6 +584,25 @@ const JobDetailScreen: React.FC = () => {
   const [draggingChecklistId, setDraggingChecklistId] = useState('');
   const [editingNoteId, setEditingNoteId] = useState('');
   const [editingNoteBody, setEditingNoteBody] = useState('');
+  const [isItemsSaving, setIsItemsSaving] = useState(false);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemDesc, setNewItemDesc] = useState('');
+  const [newItemQty, setNewItemQty] = useState('1');
+  const [newItemPrice, setNewItemPrice] = useState('');
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [showCatalogPicker, setShowCatalogPicker] = useState(false);
+  const [serviceCatalog, setServiceCatalog] = useState<ServiceCatalogItemResponse[]>([]);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
+  const [catalogQuantities, setCatalogQuantities] = useState<Record<string, string>>({});
+  const [showWorkerPicker, setShowWorkerPicker] = useState(false);
+  const [assignableWorkers, setAssignableWorkers] = useState<WorkerResponse[]>([]);
+  const [isWorkersLoading, setIsWorkersLoading] = useState(false);
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
+  const [primaryWorkerId, setPrimaryWorkerId] = useState<string | null>(null);
+  const [workerSearch, setWorkerSearch] = useState('');
+  const [isAssignSaving, setIsAssignSaving] = useState(false);
 
   useEffect(() => {
     if (activeSheet === 'date') {
@@ -558,6 +613,18 @@ const JobDetailScreen: React.FC = () => {
   const [states, setStates] = useState<StateProvinceLookupResponse[]>([]);
   const pendingChecklistOrderRef = useRef<string[]>([]);
   const didReorderChecklistRef = useRef(false);
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
 
   const loadJob = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (!jobId) {
@@ -651,6 +718,35 @@ const JobDetailScreen: React.FC = () => {
     return end ? `${start} - ${end}` : start;
   }, [job]);
 
+  const timeLabel = useMemo(() => {
+    if (!job?.scheduledStartAt) return 'No time set';
+    const start = formatTime(job.scheduledStartAt);
+    const end = job.scheduledEndAt ? ` – ${formatTime(job.scheduledEndAt)}` : '';
+    return `${start}${end}`;
+  }, [job]);
+
+  const hasCoordinates =
+    job?.serviceAddress?.latitude != null && job?.serviceAddress?.longitude != null;
+
+  const mapHtml = useMemo(() => {
+    const lat = hasCoordinates ? Number(job?.serviceAddress?.latitude) : 20;
+    const lng = hasCoordinates ? Number(job?.serviceAddress?.longitude) : 0;
+    const zoom = hasCoordinates ? 15 : 2;
+    const markerScript = hasCoordinates
+      ? `L.circleMarker([${lat},${lng}],{radius:10,color:'#2563eb',fillColor:'#3b82f6',fillOpacity:1,weight:3}).addTo(map);`
+      : '';
+    return `<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>html,body,#map{width:100%;height:100%;margin:0;padding:0}body{background:#e9f0f7}</style>
+</head><body><div id="map"></div><script>
+var map=L.map('map',{center:[${lat},${lng}],zoom:${zoom},zoomControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,touchZoom:false,attributionControl:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+${markerScript}
+</script></body></html>`;
+  }, [hasCoordinates, job?.serviceAddress?.latitude, job?.serviceAddress?.longitude]);
+
   const selectedCountry = useMemo(
     () => countries.find(country => country.code === editCountry),
     [countries, editCountry]
@@ -683,6 +779,180 @@ const JobDetailScreen: React.FC = () => {
     [states]
   );
 
+  const jobLineItems = useMemo(
+    () => ((job as any)?.lineItems || []) as JobLineItem[],
+    [job]
+  );
+
+  const saveLineItems = async (items: JobLineItem[]) => {
+    if (!job?.id) return;
+    setIsItemsSaving(true);
+    try {
+      const updated = await replaceJobLineItemsApi(
+        job.id,
+        items.map((item, index) => ({
+          sortOrder: index + 1,
+          serviceName: item.serviceName,
+          description: item.description || null,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        }))
+      );
+      setJob(updated);
+      setError('');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update line items.');
+    } finally {
+      setIsItemsSaving(false);
+    }
+  };
+
+  const handleAddLineItem = async () => {
+    const name = newItemName.trim();
+    const qty = parseFloat(newItemQty) || 1;
+    const price = parseFloat(newItemPrice) || 0;
+    if (!name) return;
+    const nextItems: JobLineItem[] = [
+      ...jobLineItems,
+      { serviceName: name, description: newItemDesc.trim() || null, quantity: qty, unitPrice: price },
+    ];
+    setNewItemName('');
+    setNewItemDesc('');
+    setNewItemQty('1');
+    setNewItemPrice('');
+    setShowManualForm(false);
+    await saveLineItems(nextItems);
+  };
+
+  const handleDeleteLineItem = async (index: number) => {
+    const nextItems = jobLineItems.filter((_, i) => i !== index);
+    await saveLineItems(nextItems);
+  };
+
+  const loadCatalog = useCallback(async () => {
+    if (serviceCatalog.length > 0) return;
+    setIsCatalogLoading(true);
+    try {
+      const result = await getServiceCatalogApi({ IsActive: true });
+      setServiceCatalog(result.data);
+    } catch {
+      // best-effort
+    } finally {
+      setIsCatalogLoading(false);
+    }
+  }, [serviceCatalog.length]);
+
+  const openCatalogPicker = () => {
+    setSelectedCatalogIds([]);
+    setCatalogQuantities({});
+    setCatalogSearch('');
+    setShowCatalogPicker(true);
+    loadCatalog();
+  };
+
+  const toggleCatalogItem = (id: string) => {
+    setSelectedCatalogIds(prev => {
+      if (prev.includes(id)) {
+        setCatalogQuantities(q => { const next = { ...q }; delete next[id]; return next; });
+        return prev.filter(x => x !== id);
+      }
+      setCatalogQuantities(q => ({ ...q, [id]: '1' }));
+      return [...prev, id];
+    });
+  };
+
+  const setCatalogItemQty = (id: string, value: string) => {
+    setCatalogQuantities(prev => ({ ...prev, [id]: value }));
+  };
+
+  const stepCatalogQty = (id: string, delta: number) => {
+    const current = parseFloat(catalogQuantities[id] || '1') || 1;
+    const next = Math.max(1, current + delta);
+    setCatalogQuantities(prev => ({ ...prev, [id]: String(next) }));
+  };
+
+  const filteredCatalog = useMemo(() => {
+    const q = catalogSearch.toLowerCase().trim();
+    if (!q) return serviceCatalog;
+    return serviceCatalog.filter(c =>
+      c.name?.toLowerCase().includes(q) || c.category?.toLowerCase().includes(q)
+    );
+  }, [serviceCatalog, catalogSearch]);
+
+  const handleAddFromCatalog = async () => {
+    const selected = serviceCatalog.filter(c => c.id && selectedCatalogIds.includes(c.id));
+    if (selected.length === 0) return;
+    const nextItems: JobLineItem[] = [
+      ...jobLineItems,
+      ...selected.map(c => ({
+        serviceName: c.name || '',
+        description: c.description?.trim() || null,
+        quantity: parseFloat(catalogQuantities[c.id!] || '1') || 1,
+        unitPrice: c.defaultUnitPrice ?? 0,
+      })),
+    ];
+    setShowCatalogPicker(false);
+    setSelectedCatalogIds([]);
+    setCatalogQuantities({});
+    await saveLineItems(nextItems);
+  };
+
+  const openWorkerPicker = async () => {
+    const currentAssignments = (job?.assignments || []);
+    setSelectedWorkerIds(currentAssignments.map((a: any) => a.userProfileId).filter(Boolean));
+    const primary = currentAssignments.find((a: any) => a.isPrimary);
+    setPrimaryWorkerId(primary?.userProfileId || null);
+    setWorkerSearch('');
+    setShowWorkerPicker(true);
+    if (assignableWorkers.length === 0) {
+      setIsWorkersLoading(true);
+      try {
+        const list = await getAssignableWorkersApi();
+        setAssignableWorkers(list);
+      } catch { /* ignore */ }
+      setIsWorkersLoading(false);
+    }
+  };
+
+  const toggleWorker = (id: string) => {
+    setSelectedWorkerIds(prev => {
+      if (prev.includes(id)) {
+        if (primaryWorkerId === id) setPrimaryWorkerId(null);
+        return prev.filter(w => w !== id);
+      }
+      const next = [...prev, id];
+      if (next.length === 1) setPrimaryWorkerId(id);
+      return next;
+    });
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!job?.id) return;
+    setIsAssignSaving(true);
+    try {
+      const assignments = selectedWorkerIds.map(id => ({
+        userProfileId: id,
+        isPrimary: id === primaryWorkerId,
+      }));
+      const updated = await replaceJobAssignmentsApi(job.id, assignments);
+      setJob(updated);
+      setShowWorkerPicker(false);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to update assignments');
+    } finally {
+      setIsAssignSaving(false);
+    }
+  };
+
+  const filteredAssignableWorkers = useMemo(() => {
+    const q = workerSearch.toLowerCase().trim();
+    if (!q) return assignableWorkers;
+    return assignableWorkers.filter(w =>
+      w.displayName.toLowerCase().includes(q) ||
+      w.email?.toLowerCase().includes(q)
+    );
+  }, [assignableWorkers, workerSearch]);
+
   const handleCall = async () => {
     const phone = job?.customer?.mobilePhone?.trim();
     if (!phone) return;
@@ -703,6 +973,41 @@ const JobDetailScreen: React.FC = () => {
     }
   };
 
+  const handleOpenMaps = async () => {
+    if (!job) return;
+    const address = getJobAddressText(job);
+    if (!address) return;
+    const encoded = encodeURIComponent(address);
+    const nativeUrl = Platform.OS === 'ios'
+      ? `comgooglemaps://?q=${encoded}`
+      : `geo:0,0?q=${encoded}`;
+    if (await Linking.canOpenURL(nativeUrl)) {
+      await Linking.openURL(nativeUrl);
+    } else {
+      await Linking.openURL(`https://maps.google.com/maps?q=${encoded}`);
+    }
+  };
+
+  const handleCreateInvoice = () => {
+    if (!job?.id) return;
+    const prefillLineItems = jobLineItems.length > 0
+      ? JSON.stringify(jobLineItems.map(item => ({
+          serviceName: item.serviceName,
+          description: item.description || '',
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })))
+      : undefined;
+    router.push({
+      pathname: '../Screens/CreateInvoiceScreen',
+      params: {
+        prefillCustomerId: job.customerId || '',
+        prefillJobId: job.id,
+        ...(prefillLineItems && { prefillLineItems }),
+      },
+    });
+  };
+
   const handleStatusUpdate = async () => {
     if (!job?.id) return;
 
@@ -721,6 +1026,28 @@ const JobDetailScreen: React.FC = () => {
       setError('');
     } catch (updateError: any) {
       setError(updateError?.message || 'Failed to update job status.');
+    } finally {
+      setIsStatusUpdating(false);
+    }
+  };
+
+  const handleQuickStatus = async (newStatus: JobStatus) => {
+    if (!job?.id || job.status === newStatus) return;
+    setActiveSheet(null);
+    setIsStatusUpdating(true);
+    try {
+      const updated = await updateJobStatusApi(job.id, {
+        status: newStatus,
+        actualStartAt:
+          newStatus === 'In Progress'
+            ? new Date().toISOString()
+            : job.actualStartAt || new Date().toISOString(),
+        actualEndAt: newStatus === 'Completed' ? new Date().toISOString() : null,
+      });
+      setJob(updated);
+      setError('');
+    } catch (statusError: any) {
+      setError(statusError?.message || 'Failed to update job status.');
     } finally {
       setIsStatusUpdating(false);
     }
@@ -1130,25 +1457,27 @@ const JobDetailScreen: React.FC = () => {
   const customerEmail = job?.customer?.email?.trim();
   const calendarDays = useMemo(() => getCalendarDays(calendarCursor), [calendarCursor]);
   const sheetTitle =
-    activeSheet === 'jobType'
-      ? 'Select Job Type'
-      : activeSheet === 'priority'
-        ? 'Select Priority'
-        : activeSheet === 'status'
-          ? 'Select Status'
-          : activeSheet === 'serviceCountry'
-            ? 'Select Country'
-            : activeSheet === 'serviceState'
-              ? 'Select State / Province'
-              : activeSheet === 'date'
-                ? 'Select Date'
-                : activeSheet === 'time'
-                  ? 'Select Time'
-                  : activeSheet === 'duration'
-                    ? 'Select Duration'
-                    : activeSheet === 'editNote'
-                      ? 'Edit Note'
-                      : 'Edit Job';
+    activeSheet === 'quickStatus'
+      ? 'Update Job Status'
+      : activeSheet === 'jobType'
+        ? 'Select Job Type'
+        : activeSheet === 'priority'
+          ? 'Select Priority'
+          : activeSheet === 'status'
+            ? 'Select Status'
+            : activeSheet === 'serviceCountry'
+              ? 'Select Country'
+              : activeSheet === 'serviceState'
+                ? 'Select State / Province'
+                : activeSheet === 'date'
+                  ? 'Select Date'
+                  : activeSheet === 'time'
+                    ? 'Select Time'
+                    : activeSheet === 'duration'
+                      ? 'Select Duration'
+                      : activeSheet === 'editNote'
+                        ? 'Edit Note'
+                        : 'Edit Job';
   const sheetOptions =
     activeSheet === 'jobType'
       ? JOB_TYPE_OPTIONS
@@ -1240,25 +1569,65 @@ const JobDetailScreen: React.FC = () => {
           }
         >
           <View style={styles.mapSection}>
-            <View style={styles.mapPinContainer}>
-              <View style={styles.mapPulse} />
-              <View style={styles.mapIconBox}>
-                <MapPin size={20} color="white" fill="white" />
+            <WebView
+              style={StyleSheet.absoluteFill}
+              source={{ html: mapHtml }}
+              scrollEnabled={false}
+              bounces={false}
+              overScrollMode="never"
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              pointerEvents="none"
+            />
+
+            {/* Open in Google Maps button */}
+            <TouchableOpacity style={styles.mapOpenBtn} onPress={handleOpenMaps} activeOpacity={0.85}>
+              <MapPin size={12} color="#2563eb" />
+              <Text style={styles.mapOpenBtnText}>Open in Google Maps</Text>
+            </TouchableOpacity>
+
+            {/* Pin overlay — shown only when coordinates are stored */}
+            {hasCoordinates ? (
+              <View style={styles.mapPinContainer}>
+                <Animated.View
+                  style={[styles.mapGlowOuter, {
+                    transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] }) }],
+                    opacity: pulseAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0.45, 0.15, 0] }),
+                  }]}
+                />
+                <Animated.View
+                  style={[styles.mapGlowInner, {
+                    transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] }) }],
+                    opacity: pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.7, 0.4, 0.1] }),
+                  }]}
+                />
+                <View style={styles.mapIconBox}>
+                  <MapPin size={20} color="white" fill="white" />
+                </View>
               </View>
+            ) : (
+              <View style={styles.mapNoPinChip}>
+                <MapPin size={13} color="#64748b" />
+                <Text style={styles.mapNoPinText}>No precise location stored</Text>
+              </View>
+            )}
+
+            {/* Address pill */}
+            <View style={styles.mapAddressPill}>
+              <Text style={styles.mapAddressText} numberOfLines={1}>{getJobAddressText(job)}</Text>
             </View>
-            <Text style={styles.addressHint}>{getJobAddressText(job)}</Text>
           </View>
 
           <View style={styles.jobInfoSection}>
             <Text style={styles.jobTitle}>{getJobDisplayTitle(job)}</Text>
-            <View style={styles.jobMetaRow}>
-              <View style={styles.metaItem}>
-                <Calendar size={14} color="#cbd5e1" />
-                <Text style={styles.metaText}>{formatDate(job?.scheduledStartAt)}</Text>
+            <View style={styles.scheduleChipsRow}>
+              <View style={styles.scheduleDateChip}>
+                <Calendar size={13} color="#64748b" />
+                <Text style={styles.scheduleDateChipText}>{formatDate(job?.scheduledStartAt)}</Text>
               </View>
-              <View style={styles.metaItem}>
-                <Clock size={14} color="#cbd5e1" />
-                <Text style={styles.metaText}>{scheduleLabel}</Text>
+              <View style={styles.scheduleTimeChip}>
+                <Clock size={14} color="#2563eb" />
+                <Text style={styles.scheduleTimeChipText}>{timeLabel}</Text>
               </View>
             </View>
             <View style={styles.jobTagRow}>
@@ -1277,6 +1646,18 @@ const JobDetailScreen: React.FC = () => {
                 <Text style={styles.primarySoftActionText}>Edit Job</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                style={styles.statusSoftAction}
+                onPress={() => setActiveSheet('quickStatus')}
+                activeOpacity={0.9}
+                disabled={isStatusUpdating}
+              >
+                {isStatusUpdating ? (
+                  <ActivityIndicator size="small" color="#059669" />
+                ) : (
+                  <Text style={styles.statusSoftActionText}>Status</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
                 style={styles.dangerSoftAction}
                 onPress={handleDeleteJob}
                 activeOpacity={0.9}
@@ -1285,6 +1666,11 @@ const JobDetailScreen: React.FC = () => {
                 <Text style={styles.dangerSoftActionText}>Delete</Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity style={styles.createInvoiceBtn} onPress={handleCreateInvoice} activeOpacity={0.88}>
+              <FileText size={16} color="#059669" />
+              <Text style={styles.createInvoiceBtnText}>Create Invoice from this Job</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.customerSection}>
@@ -1315,6 +1701,39 @@ const JobDetailScreen: React.FC = () => {
             </View>
           </View>
 
+          {/* Assigned Workers */}
+          <View style={styles.workersSection}>
+            <View style={styles.workersSectionHeader}>
+              <View style={styles.workersSectionTitleRow}>
+                <Users size={16} color="#64748b" />
+                <Text style={styles.workersSectionTitle}>Assigned Workers</Text>
+              </View>
+              <TouchableOpacity style={styles.assignWorkersBtn} onPress={openWorkerPicker}>
+                <UserCheck size={14} color="#2563eb" />
+                <Text style={styles.assignWorkersBtnText}>Assign</Text>
+              </TouchableOpacity>
+            </View>
+            {(job?.assignments || []).length === 0 ? (
+              <Text style={styles.noWorkersText}>No workers assigned</Text>
+            ) : (
+              <View style={styles.workerChipRow}>
+                {(job?.assignments || []).map((a: any) => (
+                  <View key={a.id} style={[styles.workerChip, a.isPrimary && styles.workerChipPrimary]}>
+                    <View style={styles.workerChipAvatar}>
+                      <Text style={styles.workerChipAvatarText}>
+                        {(a.displayName || '?').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
+                      </Text>
+                    </View>
+                    <Text style={styles.workerChipName} numberOfLines={1}>{a.displayName}</Text>
+                    {a.isPrimary ? (
+                      <View style={styles.primaryDot} />
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
           {!!error ? (
             <View style={styles.inlineErrorBox}>
               <Text style={styles.inlineErrorText}>{error}</Text>
@@ -1322,7 +1741,7 @@ const JobDetailScreen: React.FC = () => {
           ) : null}
 
           <View style={styles.tabBar}>
-            {(['Checklist', 'Photos', 'Notes'] as TabType[]).map(tab => (
+            {(['Checklist', 'Items', 'Photos', 'Notes'] as TabType[]).map(tab => (
               <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={styles.tabItem}>
                 <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
                 {activeTab === tab ? <View style={styles.tabIndicator} /> : null}
@@ -1483,6 +1902,128 @@ const JobDetailScreen: React.FC = () => {
               </View>
             ) : null}
 
+            {activeTab === 'Items' ? (
+              <View style={styles.listGap}>
+                <View style={styles.checklistHeaderCard}>
+                  <Text style={styles.checklistHeaderTitle}>Service Items</Text>
+                  <Text style={styles.checklistHeaderText}>
+                    Items here will auto-fill when creating an invoice from this job.
+                  </Text>
+                </View>
+
+                {jobLineItems.length > 0 ? (
+                  jobLineItems.map((item, index) => (
+                    <View key={item.id || index} style={styles.lineItemCard}>
+                      <View style={styles.lineItemIcon}>
+                        <Package size={16} color="#2563eb" />
+                      </View>
+                      <View style={styles.lineItemMain}>
+                        <Text style={styles.lineItemName}>{item.serviceName}</Text>
+                        {item.description ? (
+                          <Text style={styles.lineItemDesc}>{item.description}</Text>
+                        ) : null}
+                        <View style={styles.lineItemPriceRow}>
+                          <Text style={styles.lineItemMeta}>
+                            {item.quantity} × {item.unitPrice.toFixed(2)}
+                          </Text>
+                          <Text style={styles.lineItemTotal}>
+                            = {(item.lineTotal ?? item.quantity * item.unitPrice).toFixed(2)}
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteLineItem(index)}
+                        disabled={isItemsSaving}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={styles.lineItemDeleteBtn}
+                      >
+                        <Trash2 size={15} color={isItemsSaving ? '#cbd5e1' : '#ef4444'} />
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyCardTitle}>No items yet</Text>
+                    <Text style={styles.emptyCardText}>Pick from your catalog or add manually. Items auto-fill your invoice.</Text>
+                  </View>
+                )}
+
+                <View style={styles.addItemActionsRow}>
+                  <TouchableOpacity style={styles.addItemCatalogBtn} onPress={openCatalogPicker} activeOpacity={0.85}>
+                    <BookOpen size={15} color="#2563eb" />
+                    <Text style={styles.addItemCatalogBtnText}>From Catalog</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.addItemManualBtn, showManualForm && styles.addItemManualBtnActive]}
+                    onPress={() => setShowManualForm(v => !v)}
+                    activeOpacity={0.85}
+                  >
+                    <Plus size={15} color={showManualForm ? '#2563eb' : '#64748b'} />
+                    <Text style={[styles.addItemManualBtnText, showManualForm && styles.addItemManualBtnTextActive]}>
+                      Add Manually
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {showManualForm ? (
+                  <View style={styles.addItemCard}>
+                    <TextInput
+                      style={styles.addItemInput}
+                      placeholder="Service name *"
+                      placeholderTextColor="#94a3b8"
+                      value={newItemName}
+                      onChangeText={setNewItemName}
+                    />
+                    <TextInput
+                      style={[styles.addItemInput, styles.addItemDescInput]}
+                      placeholder="Description (optional)"
+                      placeholderTextColor="#94a3b8"
+                      multiline
+                      numberOfLines={2}
+                      value={newItemDesc}
+                      onChangeText={setNewItemDesc}
+                    />
+                    <View style={styles.addItemRow}>
+                      <View style={styles.addItemSmall}>
+                        <Text style={styles.addItemFieldLabel}>Quantity</Text>
+                        <TextInput
+                          style={styles.addItemInput}
+                          placeholder="1"
+                          placeholderTextColor="#94a3b8"
+                          keyboardType="decimal-pad"
+                          value={newItemQty}
+                          onChangeText={setNewItemQty}
+                        />
+                      </View>
+                      <View style={styles.addItemSmall}>
+                        <Text style={styles.addItemFieldLabel}>Unit Price</Text>
+                        <TextInput
+                          style={styles.addItemInput}
+                          placeholder="0.00"
+                          placeholderTextColor="#94a3b8"
+                          keyboardType="decimal-pad"
+                          value={newItemPrice}
+                          onChangeText={setNewItemPrice}
+                        />
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.addItemSaveBtn, (!newItemName.trim() || isItemsSaving) && styles.addItemSaveBtnDisabled]}
+                      onPress={handleAddLineItem}
+                      disabled={!newItemName.trim() || isItemsSaving}
+                      activeOpacity={0.85}
+                    >
+                      {isItemsSaving ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <Text style={styles.addItemSaveBtnText}>Add Item</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             {activeTab === 'Notes' ? (
               <View style={styles.notesSection}>
                 <View style={styles.noteComposer}>
@@ -1586,6 +2127,240 @@ const JobDetailScreen: React.FC = () => {
           )}
         </View>
       ) : null}
+
+      <Modal visible={showCatalogPicker} animationType="slide" onRequestClose={() => setShowCatalogPicker(false)}>
+        <SafeAreaView style={styles.catalogModalOverlay}>
+          <View style={styles.catalogModalContent}>
+            <View style={styles.catalogModalHeader}>
+              <Text style={styles.catalogModalTitle}>Select Services</Text>
+              <TouchableOpacity onPress={() => setShowCatalogPicker(false)} style={styles.catalogModalCloseBtn}>
+                <X size={20} color="#0f172a" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.catalogSearchContainer}>
+              <Search size={18} color="#cbd5e1" style={styles.catalogSearchIcon} />
+              <TextInput
+                style={styles.catalogSearchInput}
+                placeholder="Search services..."
+                placeholderTextColor="#94a3b8"
+                value={catalogSearch}
+                onChangeText={setCatalogSearch}
+                autoCorrect={false}
+              />
+            </View>
+
+            {isCatalogLoading ? (
+              <View style={styles.catalogLoadingBox}>
+                <ActivityIndicator size="small" color="#2563eb" />
+                <Text style={styles.catalogLoadingText}>Loading catalog...</Text>
+              </View>
+            ) : filteredCatalog.length === 0 ? (
+              <View style={styles.catalogLoadingBox}>
+                <Text style={styles.catalogEmptyText}>
+                  {serviceCatalog.length === 0 ? 'No services in your catalog yet.' : 'No results found.'}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.catalogModalScroll} showsVerticalScrollIndicator={false}>
+                {filteredCatalog.map(item => {
+                  const isSelected = Boolean(item.id && selectedCatalogIds.includes(item.id));
+                  return (
+                    <View
+                      key={item.id}
+                      style={[styles.catalogModalItem, isSelected && styles.catalogModalItemSelected]}
+                    >
+                      <TouchableOpacity
+                        style={styles.catalogModalItemRow}
+                        onPress={() => item.id && toggleCatalogItem(item.id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.catalogModalItemContent}>
+                          <Text style={[styles.catalogModalItemTitle, isSelected && styles.catalogModalItemTitleSelected]}>
+                            {item.name}
+                          </Text>
+                          {item.description ? (
+                            <Text style={styles.catalogModalItemDesc} numberOfLines={2}>{item.description}</Text>
+                          ) : null}
+                          <View style={styles.catalogModalItemMeta}>
+                            {item.category ? (
+                              <View style={styles.catalogCategoryChip}>
+                                <Text style={styles.catalogCategoryText}>{item.category}</Text>
+                              </View>
+                            ) : null}
+                            <Text style={styles.catalogModalItemPrice}>
+                              {(item.defaultUnitPrice ?? 0).toFixed(2)}
+                            </Text>
+                          </View>
+                        </View>
+                        {isSelected ? (
+                          <View style={styles.catalogCheckCircle}>
+                            <Check size={14} color="white" strokeWidth={4} />
+                          </View>
+                        ) : (
+                          <View style={styles.catalogUncheckCircle} />
+                        )}
+                      </TouchableOpacity>
+
+                      {isSelected && item.id ? (
+                        <View style={styles.catalogQtyRow}>
+                          <Text style={styles.catalogQtyLabel}>Quantity</Text>
+                          <View style={styles.catalogQtyStepper}>
+                            <TouchableOpacity
+                              style={styles.catalogQtyBtn}
+                              onPress={() => stepCatalogQty(item.id!, -1)}
+                            >
+                              <Text style={styles.catalogQtyBtnText}>−</Text>
+                            </TouchableOpacity>
+                            <TextInput
+                              style={styles.catalogQtyInput}
+                              value={catalogQuantities[item.id] ?? '1'}
+                              onChangeText={v => setCatalogItemQty(item.id!, v)}
+                              keyboardType="decimal-pad"
+                              selectTextOnFocus
+                            />
+                            <TouchableOpacity
+                              style={styles.catalogQtyBtn}
+                              onPress={() => stepCatalogQty(item.id!, 1)}
+                            >
+                              <Text style={styles.catalogQtyBtnText}>+</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <View style={styles.catalogModalFooter}>
+              <TouchableOpacity
+                style={[styles.catalogAddBtn, (selectedCatalogIds.length === 0 || isItemsSaving) && styles.catalogAddBtnDisabled]}
+                onPress={handleAddFromCatalog}
+                disabled={selectedCatalogIds.length === 0 || isItemsSaving}
+                activeOpacity={0.88}
+              >
+                {isItemsSaving ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.catalogAddBtnText}>
+                    {selectedCatalogIds.length > 0
+                      ? `Add ${selectedCatalogIds.length} Item${selectedCatalogIds.length > 1 ? 's' : ''}`
+                      : 'Select items above'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Worker Picker Modal */}
+      <Modal visible={showWorkerPicker} animationType="slide" onRequestClose={() => setShowWorkerPicker(false)}>
+        <SafeAreaView style={styles.catalogModalOverlay}>
+          <View style={styles.catalogModalContent}>
+            <View style={styles.catalogModalHeader}>
+              <Text style={styles.catalogModalTitle}>Assign Workers</Text>
+              <TouchableOpacity style={styles.catalogModalCloseBtn} onPress={() => setShowWorkerPicker(false)}>
+                <X size={20} color="#0f172a" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.catalogSearchContainer}>
+              <Search size={18} color="#94a3b8" style={styles.catalogSearchIcon} />
+              <TextInput
+                style={styles.catalogSearchInput}
+                placeholder="Search workers..."
+                placeholderTextColor="#94a3b8"
+                value={workerSearch}
+                onChangeText={setWorkerSearch}
+              />
+            </View>
+
+            {isWorkersLoading ? (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="large" color="#2563eb" />
+              </View>
+            ) : (
+              <ScrollView style={styles.catalogModalScroll} showsVerticalScrollIndicator={false}>
+                {filteredAssignableWorkers.length === 0 ? (
+                  <View style={{ padding: 32, alignItems: 'center' }}>
+                    <Text style={{ color: '#94a3b8', fontSize: 14 }}>No workers found</Text>
+                  </View>
+                ) : (
+                  filteredAssignableWorkers.map(worker => {
+                    const isSelected = selectedWorkerIds.includes(worker.id);
+                    const isPrimary = primaryWorkerId === worker.id;
+                    return (
+                      <View key={worker.id} style={[styles.catalogModalItem, isSelected && styles.catalogModalItemSelected]}>
+                        <TouchableOpacity
+                          style={styles.catalogModalItemRow}
+                          onPress={() => toggleWorker(worker.id)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.workerPickerAvatar}>
+                            <Text style={styles.workerPickerAvatarText}>{getWorkerInitials(worker)}</Text>
+                          </View>
+                          <View style={styles.catalogModalItemContent}>
+                            <Text style={styles.catalogModalItemTitle}>{worker.displayName}</Text>
+                            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                              <View style={styles.workerRoleChip}>
+                                <Shield size={9} color="#64748b" />
+                                <Text style={styles.workerRoleChipText}>{formatWorkerRoleLabel(worker.role)}</Text>
+                              </View>
+                              {worker.email ? (
+                                <Text style={styles.workerPickerEmail} numberOfLines={1}>{worker.email}</Text>
+                              ) : null}
+                            </View>
+                          </View>
+                          {isSelected ? (
+                            <View style={styles.catalogCheckCircle}>
+                              <Check size={14} color="white" />
+                            </View>
+                          ) : (
+                            <View style={styles.catalogUncheckCircle} />
+                          )}
+                        </TouchableOpacity>
+                        {isSelected ? (
+                          <TouchableOpacity
+                            style={styles.primaryWorkerRow}
+                            onPress={() => setPrimaryWorkerId(isPrimary ? null : worker.id)}
+                          >
+                            <View style={[styles.primaryRadio, isPrimary && styles.primaryRadioActive]}>
+                              {isPrimary ? <View style={styles.primaryRadioDot} /> : null}
+                            </View>
+                            <Text style={styles.primaryWorkerLabel}>Set as primary</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+            )}
+
+            <View style={styles.catalogModalFooter}>
+              <TouchableOpacity
+                style={[styles.catalogAddBtn, isAssignSaving && styles.catalogAddBtnDisabled]}
+                onPress={handleSaveAssignments}
+                disabled={isAssignSaving}
+                activeOpacity={0.88}
+              >
+                {isAssignSaving ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text style={styles.catalogAddBtnText}>
+                    {selectedWorkerIds.length > 0
+                      ? `Assign ${selectedWorkerIds.length} Worker${selectedWorkerIds.length > 1 ? 's' : ''}`
+                      : 'Save (clear assignments)'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       <BottomSheet visible={Boolean(activeSheet)} onClose={() => setActiveSheet(null)} title={sheetTitle}>
         {activeSheet === 'editJob' ? (
@@ -1981,6 +2756,27 @@ const JobDetailScreen: React.FC = () => {
               <Text style={styles.sheetPrimaryBtnText}>Apply Time</Text>
             </TouchableOpacity>
           </View>
+        ) : activeSheet === 'quickStatus' ? (
+          <View style={styles.sheetOptionsList}>
+            {JOB_STATUS_OPTIONS.map(status => {
+              const isCurrent = job?.status === status;
+              const dotColor = STATUS_COLORS[status] || '#64748b';
+              return (
+                <TouchableOpacity
+                  key={status}
+                  style={[styles.sheetOptionRow, isCurrent && styles.sheetOptionRowActive]}
+                  onPress={() => handleQuickStatus(status)}
+                  disabled={isStatusUpdating || isCurrent}
+                >
+                  <View style={styles.statusOptionLeft}>
+                    <View style={[styles.statusOptionDot, { backgroundColor: dotColor }]} />
+                    <Text style={[styles.sheetOptionText, isCurrent && { color: dotColor }]}>{status}</Text>
+                  </View>
+                  {isCurrent ? <Check size={18} color={dotColor} strokeWidth={3} /> : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         ) : (
           <View style={styles.sheetOptionsList}>
             {sheetOptions.map(option => (
@@ -2053,14 +2849,36 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: '700', color: '#0f172a' },
   scrollPadding: { paddingBottom: 150 },
   mapSection: {
-    height: 200,
-    backgroundColor: '#dbeafe',
+    height: 220,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
   },
-  mapPinContainer: { alignItems: 'center', justifyContent: 'center' },
-  mapPulse: { position: 'absolute', width: 60, height: 60, backgroundColor: 'rgba(37, 99, 235, 0.2)', borderRadius: 30 },
+  /* Map: no-location chip */
+  mapNoPinChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderWidth: 1, borderColor: '#e2e8f0',
+  },
+  mapNoPinText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
+  /* Glow rings */
+  mapGlowOuter: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#2563eb',
+  },
+  mapGlowInner: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#3b82f6',
+  },
+  mapPinContainer: { alignItems: 'center', justifyContent: 'center', position: 'relative' },
   mapIconBox: {
     width: 44,
     height: 44,
@@ -2068,16 +2886,56 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: 'white',
+    shadowColor: '#1d4ed8',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  addressHint: {
-    marginTop: 20,
-    fontSize: 13,
-    color: '#1e3a8a',
-    fontWeight: '700',
-    textAlign: 'center',
+  /* Map overlay UI */
+  mapOpenBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    zIndex: 2,
+    shadowColor: '#1e3a8a',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
+  mapOpenBtnText: { fontSize: 11, fontWeight: '800', color: '#2563eb' },
+  mapAddressPill: {
+    position: 'absolute',
+    bottom: 12,
+    left: 16,
+    right: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(191,219,254,0.8)',
+    zIndex: 2,
+    alignItems: 'center',
+    shadowColor: '#1e3a8a',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  mapAddressText: { fontSize: 12, fontWeight: '700', color: '#1e3a8a', textAlign: 'center' },
   jobInfoSection: {
     padding: 24,
     backgroundColor: 'white',
@@ -2087,7 +2945,24 @@ const styles = StyleSheet.create({
   jobTitle: { fontSize: 18, fontWeight: '700', color: '#0f172a', textTransform: 'capitalize' },
   jobMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 12 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metaText: { fontSize: 13, color: '#64748b', fontWeight: '500', flexShrink: 1, },
+  metaText: { fontSize: 13, color: '#64748b', fontWeight: '500', flexShrink: 1 },
+  scheduleChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  scheduleDateChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingHorizontal: 12, paddingVertical: 9,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1, borderColor: '#e2e8f0',
+    borderRadius: 14,
+  },
+  scheduleDateChipText: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  scheduleTimeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingHorizontal: 14, paddingVertical: 9,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1.5, borderColor: '#2563eb',
+    borderRadius: 14,
+  },
+  scheduleTimeChipText: { fontSize: 13, fontWeight: '800', color: '#2563eb' },
   jobTagRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 16 },
   tagPill: {
     paddingHorizontal: 12,
@@ -2110,7 +2985,7 @@ const styles = StyleSheet.create({
   },
   primarySoftActionText: { fontSize: 13, fontWeight: '900', color: '#2563eb' },
   dangerSoftAction: {
-    minWidth: 96,
+    minWidth: 80,
     minHeight: 46,
     borderRadius: 16,
     backgroundColor: '#fef2f2',
@@ -2118,9 +2993,37 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
   },
   dangerSoftActionText: { fontSize: 13, fontWeight: '900', color: '#b91c1c' },
+  statusSoftAction: {
+    minWidth: 80,
+    minHeight: 46,
+    borderRadius: 16,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  statusSoftActionText: { fontSize: 13, fontWeight: '900', color: '#059669' },
+  createInvoiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 13,
+    borderRadius: 16,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+  },
+  createInvoiceBtnText: { fontSize: 14, fontWeight: '800', color: '#059669' },
+  sheetOptionRowActive: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
+  statusOptionLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusOptionDot: { width: 10, height: 10, borderRadius: 5 },
   customerSection: { padding: 24, backgroundColor: 'white' },
   customerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   customerAvatar: {
@@ -2729,6 +3632,420 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
+  },
+  lineItemCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 18,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+    gap: 12,
+  },
+  lineItemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  lineItemMain: { flex: 1 },
+  lineItemName: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
+  lineItemDesc: { fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 17 },
+  lineItemPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  lineItemMeta: { fontSize: 12, color: '#94a3b8' },
+  lineItemTotal: { fontSize: 13, fontWeight: '800', color: '#2563eb' },
+  lineItemDeleteBtn: { paddingTop: 2 },
+  addItemActionsRow: { flexDirection: 'row', gap: 10 },
+  addItemCatalogBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 13,
+    borderRadius: 16,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1.5,
+    borderColor: '#bfdbfe',
+  },
+  addItemCatalogBtnText: { fontSize: 13, fontWeight: '800', color: '#2563eb' },
+  addItemManualBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 13,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  addItemManualBtnActive: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+  addItemManualBtnText: { fontSize: 13, fontWeight: '800', color: '#64748b' },
+  addItemManualBtnTextActive: { color: '#2563eb' },
+  addItemCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    gap: 10,
+  },
+  addItemInput: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  addItemDescInput: { minHeight: 64, textAlignVertical: 'top' },
+  addItemFieldLabel: { fontSize: 11, fontWeight: '700', color: '#94a3b8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 },
+  addItemRow: { flexDirection: 'row', gap: 10 },
+  addItemSmall: { flex: 1 },
+  addItemSaveBtn: {
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addItemSaveBtnDisabled: { opacity: 0.45 },
+  addItemSaveBtnText: { fontSize: 14, fontWeight: '800', color: 'white' },
+  catalogModalOverlay: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  catalogModalContent: {
+    flex: 1,
+    padding: 24,
+  },
+  catalogModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  catalogModalTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  catalogModalCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  catalogSearchContainer: {
+    position: 'relative',
+    marginBottom: 24,
+    justifyContent: 'center',
+  },
+  catalogSearchIcon: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 10,
+  },
+  catalogSearchInput: {
+    width: '100%',
+    height: 56,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    paddingLeft: 48,
+    paddingRight: 16,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  catalogLoadingBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  catalogLoadingText: { fontSize: 13, color: '#94a3b8' },
+  catalogEmptyText: { fontSize: 14, color: '#94a3b8', textAlign: 'center' },
+  catalogModalScroll: { flex: 1 },
+  catalogModalItem: {
+    width: '100%',
+    padding: 20,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    flexDirection: 'column',
+    marginBottom: 12,
+  },
+  catalogModalItemSelected: { borderColor: '#bfdbfe', backgroundColor: '#eff6ff' },
+  catalogModalItemContent: { flex: 1, paddingRight: 16 },
+  catalogModalItemTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  catalogModalItemTitleSelected: { color: '#2563eb' },
+  catalogModalItemDesc: { fontSize: 12, color: '#64748b', marginTop: 3, lineHeight: 17 },
+  catalogModalItemMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  catalogCategoryChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  catalogCategoryText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
+  catalogModalItemPrice: { fontSize: 13, fontWeight: '800', color: '#0f172a' },
+  catalogCheckCircle: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  catalogUncheckCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    flexShrink: 0,
+  },
+  catalogModalItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  catalogQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#bfdbfe',
+  },
+  catalogQtyLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  catalogQtyStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    overflow: 'hidden',
+  },
+  catalogQtyBtn: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catalogQtyBtnText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2563eb',
+    lineHeight: 24,
+  },
+  catalogQtyInput: {
+    width: 48,
+    height: 38,
+    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: 'white',
+    paddingVertical: 0,
+  },
+  catalogModalFooter: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  catalogAddBtn: {
+    height: 56,
+    borderRadius: 20,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catalogAddBtnDisabled: { backgroundColor: '#cbd5e1' },
+  catalogAddBtnText: { fontSize: 15, fontWeight: '900', color: 'white' },
+  // Workers section
+  workersSection: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+  },
+  workersSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  workersSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  workersSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  assignWorkersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  assignWorkersBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  noWorkersText: {
+    fontSize: 13,
+    color: '#cbd5e1',
+    fontStyle: 'italic',
+  },
+  workerChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  workerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  workerChipPrimary: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
+  },
+  workerChipAvatar: {
+    width: 22,
+    height: 22,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  workerChipAvatarText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: 'white',
+  },
+  workerChipName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+    maxWidth: 100,
+  },
+  primaryDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2563eb',
+  },
+  // Worker picker
+  workerPickerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  workerPickerAvatarText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#2563eb',
+  },
+  workerRoleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  workerRoleChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  workerPickerEmail: {
+    fontSize: 11,
+    color: '#94a3b8',
+    flex: 1,
+  },
+  primaryWorkerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 10,
+    paddingHorizontal: 4,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  primaryRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryRadioActive: {
+    borderColor: '#2563eb',
+  },
+  primaryRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#2563eb',
+  },
+  primaryWorkerLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
   },
 });
 

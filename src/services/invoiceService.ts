@@ -6,6 +6,7 @@ import {
   UpdateInvoiceStatusRequest,
   getFieldoreAPI,
 } from '@/src/api/generated';
+import { formatCurrency } from '@/src/utils/currency';
 
 const api = getFieldoreAPI();
 
@@ -22,14 +23,50 @@ type PagedInvoiceResult = {
   pageSize: number;
 };
 
+// The API stores/returns canonical lowercase snake_case values:
+// draft, sent, viewed, partially_paid, paid, overdue, void.
+// The app works in display-label space ('Draft', 'Partially Paid', 'Cancelled', ...)
+// and converts at the API boundary via these two helpers.
+const STATUS_LABEL_BY_VALUE: Record<string, string> = {
+  draft: 'Draft',
+  sent: 'Sent',
+  viewed: 'Viewed',
+  partially_paid: 'Partially Paid',
+  paid: 'Paid',
+  overdue: 'Overdue',
+  void: 'Cancelled',
+  unpaid: 'Unpaid',
+};
+
+const STATUS_VALUE_BY_LABEL: Record<string, string> = {
+  Draft: 'draft',
+  Sent: 'sent',
+  Viewed: 'viewed',
+  'Partially Paid': 'partially_paid',
+  Paid: 'paid',
+  Overdue: 'overdue',
+  Cancelled: 'void',
+  Void: 'void',
+  Unpaid: 'unpaid',
+};
+
+const titleCaseFromValue = (value: string) =>
+  value
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
 const normalizeInvoiceStatusFromApi = (status?: string | null) => {
   if (!status) return status;
-  return status.trim() === 'PartiallyPaid' ? 'Partially Paid' : status.trim();
+  const trimmed = status.trim();
+  return STATUS_LABEL_BY_VALUE[trimmed.toLowerCase()] ?? titleCaseFromValue(trimmed);
 };
 
 const normalizeInvoiceStatusForApi = (status?: string | null) => {
   if (!status) return status;
-  return status.trim() === 'Partially Paid' ? 'PartiallyPaid' : status.trim();
+  const trimmed = status.trim();
+  return STATUS_VALUE_BY_LABEL[trimmed] ?? trimmed.toLowerCase().replace(/\s+/g, '_');
 };
 
 const normalizeInvoiceResponse = (invoice: InvoiceResponse): InvoiceResponse => ({
@@ -87,8 +124,13 @@ export const getInvoicesApi = async (
   payload: PostApiInvoicesGetAllInvoicesParams
 ): Promise<PagedInvoiceResult> => {
   try {
-    const response = await api.postApiInvoicesGetAllInvoices(payload);
-    return unwrapPaged(response.data, payload);
+    // The Status filter arrives as a display label ('Cancelled', 'Partially Paid');
+    // convert it to the canonical API value before querying.
+    const normalizedPayload: PostApiInvoicesGetAllInvoicesParams = payload.Status
+      ? { ...payload, Status: normalizeInvoiceStatusForApi(payload.Status) ?? payload.Status }
+      : payload;
+    const response = await api.postApiInvoicesGetAllInvoices(normalizedPayload);
+    return unwrapPaged(response.data, normalizedPayload);
   } catch (error: any) {
     throw new Error(getApiErrorMessage(error, 'Something went wrong while fetching invoices'));
   }
@@ -145,13 +187,8 @@ export const updateInvoiceStatusApi = async (
   }
 };
 
-export const formatInvoiceCurrency = (amount?: number | null) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount || 0);
+export const formatInvoiceCurrency = (amount?: number | null, currencyCode?: string | null) =>
+  formatCurrency(amount, currencyCode);
 
 export const formatInvoiceStatusLabel = (status?: string | null) => {
   if (!status) return 'Draft';
@@ -171,6 +208,8 @@ export const getInvoiceStatusTone = (status?: string | null) => {
     case 'Sent':
     case 'Viewed':
       return { bg: '#f8fafc', text: '#475569', border: '#e2e8f0' };
+    case 'Cancelled':
+      return { bg: '#f1f5f9', text: '#94a3b8', border: '#e2e8f0' };
     default:
       return { bg: '#fffbeb', text: '#d97706', border: '#fde68a' };
   }

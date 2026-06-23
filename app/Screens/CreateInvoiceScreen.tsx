@@ -22,6 +22,7 @@ import {
   INVOICE_STATUS_OPTIONS,
   InvoiceFormData,
   InvoiceFormErrors,
+  InvoiceLineItemFormData,
   NET_TERMS_OPTIONS,
   buildCreateInvoicePayload,
   buildUpdateInvoicePayload,
@@ -174,8 +175,11 @@ const findStateMatch = (states: StateProvinceLookupResponse[], rawValue: string)
 };
 
 const CreateInvoiceScreen: React.FC = () => {
-  const params = useLocalSearchParams<{ invoiceId?: string }>();
+  const params = useLocalSearchParams<{ invoiceId?: string; prefillCustomerId?: string; prefillJobId?: string; prefillLineItems?: string }>();
   const invoiceId = typeof params.invoiceId === 'string' ? params.invoiceId : '';
+  const prefillCustomerId = typeof params.prefillCustomerId === 'string' ? params.prefillCustomerId : '';
+  const prefillJobId = typeof params.prefillJobId === 'string' ? params.prefillJobId : '';
+  const prefillLineItemsRaw = typeof params.prefillLineItems === 'string' ? params.prefillLineItems : '';
   const isEditMode = Boolean(invoiceId);
 
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
@@ -292,6 +296,50 @@ const CreateInvoiceScreen: React.FC = () => {
 
       if (invoiceResponse) {
         setFormData(mapInvoiceResponseToFormData(invoiceResponse));
+      } else if (!isEditMode && (prefillCustomerId || prefillJobId)) {
+        const prefillCustomer = prefillCustomerId
+          ? customersResponse.data.find(c => c.id === prefillCustomerId)
+          : null;
+        const address = getPrimaryCustomerAddress(prefillCustomer);
+        const matchedCountry = address?.country
+          ? findCountryMatch(countriesResult.data || [], address.country)
+          : null;
+        let parsedLineItems: InvoiceLineItemFormData[] | undefined;
+        if (prefillLineItemsRaw) {
+          try {
+            const rawItems = JSON.parse(prefillLineItemsRaw) as Array<{
+              serviceName?: string;
+              description?: string;
+              quantity?: number;
+              unitPrice?: number;
+            }>;
+            if (Array.isArray(rawItems) && rawItems.length > 0) {
+              parsedLineItems = rawItems.map((item, index) => ({
+                id: `line-prefill-${index}-${Date.now()}`,
+                name: item.serviceName?.trim() || '',
+                description: item.description?.trim() || '',
+                quantity: String(item.quantity || 1),
+                unitRate: String(item.unitPrice || 0),
+              }));
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+        setFormData(current => ({
+          ...current,
+          ...(prefillCustomerId && { customerId: prefillCustomerId }),
+          ...(prefillJobId && { jobId: prefillJobId }),
+          ...(prefillCustomer && {
+            billingLine1: address?.line1?.trim() || '',
+            billingLine2: address?.line2?.trim() || '',
+            billingCity: address?.city?.trim() || '',
+            billingStateOrProvince: address?.stateOrProvince?.trim() || '',
+            billingPostalCode: address?.postalCode?.trim() || '',
+            billingCountry: matchedCountry?.code || address?.country?.trim() || '',
+          }),
+          ...(parsedLineItems && parsedLineItems.length > 0 && { lineItems: parsedLineItems }),
+        }));
       }
     } catch (loadError: any) {
       setScreenError(loadError?.message || 'Failed to load invoice form.');
@@ -299,7 +347,7 @@ const CreateInvoiceScreen: React.FC = () => {
       setIsLoadingCountries(false);
       setIsBootLoading(false);
     }
-  }, [invoiceId]);
+  }, [invoiceId, isEditMode, prefillCustomerId, prefillJobId, prefillLineItemsRaw]);
 
   useEffect(() => {
     loadBootstrapData();
