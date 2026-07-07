@@ -9,6 +9,8 @@ import {
   MapPin,
   PenSquare,
   Plus,
+  RotateCcw,
+  Send,
   Trash2,
 } from 'lucide-react-native';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -17,6 +19,7 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -40,7 +43,10 @@ import {
   deletePaymentApi,
   formatPaymentDate,
   formatPaymentMethodLabel,
+  getStripeStatusApi,
   recordPaymentApi,
+  refundPaymentApi,
+  sendInvoiceApi,
 } from '@/src/services/paymentService';
 
 const STATUS_ACTIONS = ['Draft', 'Sent', 'Viewed', 'Partially Paid', 'Paid', 'Overdue'] as const;
@@ -96,6 +102,8 @@ const InvoiceDetailScreen: React.FC = () => {
   const [showMethodPicker, setShowMethodPicker] = useState(false);
   const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [isDeletingPayment, setIsDeletingPayment] = useState<string | null>(null);
+  const [isSendingInvoice, setIsSendingInvoice] = useState(false);
+  const [isRefunding, setIsRefunding] = useState<string | null>(null);
 
   const loadInvoice = useCallback(async () => {
     if (!invoiceId) {
@@ -135,7 +143,7 @@ const InvoiceDetailScreen: React.FC = () => {
   const payments: PaymentRecord[] = (invoice as any)?.payments ?? [];
 
   const openPayModal = () => {
-    setPayAmount('');
+    setPayAmount(balanceDueAmount > 0 ? balanceDueAmount.toFixed(2) : '');
     setPayMethod('cash');
     setPayDate(new Date().toISOString().split('T')[0]);
     setPayRef('');
@@ -191,6 +199,71 @@ const InvoiceDetailScreen: React.FC = () => {
         },
       },
     ]);
+  };
+
+  const handleRefundPayment = (payment: PaymentRecord) => {
+    if (!invoiceId) return;
+    Alert.prompt(
+      'Refund Payment',
+      `Original amount: ${formatInvoiceCurrency(payment.amount)}\nEnter refund amount:`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Refund',
+          style: 'destructive',
+          onPress: async (value) => {
+            const amount = parseFloat(value ?? '');
+            if (isNaN(amount) || amount <= 0 || amount > payment.amount) {
+              Alert.alert('Invalid', `Enter amount between 0.01 and ${formatInvoiceCurrency(payment.amount)}`);
+              return;
+            }
+            setIsRefunding(payment.id);
+            try {
+              await refundPaymentApi(invoiceId, { paymentId: payment.id, amount, notes: 'Refund' });
+              await loadInvoice();
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to record refund.');
+            } finally {
+              setIsRefunding(null);
+            }
+          },
+        },
+      ],
+      'plain-text',
+      payment.amount.toFixed(2)
+    );
+  };
+
+  const handleSendInvoice = async () => {
+    if (!invoiceId) return;
+    setIsSendingInvoice(true);
+    try {
+      const stripe = await getStripeStatusApi();
+      if (!stripe.isConnected || !stripe.onboardingComplete) {
+        Alert.alert(
+          'Stripe Not Connected',
+          'You need to connect your Stripe account before sharing payment links. Go to Settings → Stripe Payments to connect.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Go to Settings',
+              onPress: () => router.push('/(tabs)/Settings'),
+            },
+          ]
+        );
+        return;
+      }
+      const result = await sendInvoiceApi(invoiceId);
+      await loadInvoice();
+      await Share.share({
+        title: `Invoice ${result.invoiceNumber}`,
+        message: `Hi, please find your invoice ${result.invoiceNumber} here: ${result.publicUrl}`,
+      });
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to send invoice.');
+    } finally {
+      setIsSendingInvoice(false);
+    }
   };
 
   const handleStatusUpdate = async (status: string) => {
@@ -249,6 +322,16 @@ const InvoiceDetailScreen: React.FC = () => {
             }
           >
             <Eye size={20} color="#64748b" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.iconButton, isSendingInvoice && { opacity: 0.5 }]}
+            onPress={handleSendInvoice}
+            disabled={isSendingInvoice}
+          >
+            {isSendingInvoice
+              ? <ActivityIndicator size={18} color="#2563eb" />
+              : <Send size={18} color="#2563eb" />
+            }
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
@@ -446,33 +529,52 @@ const InvoiceDetailScreen: React.FC = () => {
               {payments.map((p, idx) => {
                 const isLast = idx === payments.length - 1;
                 const isDeleting = isDeletingPayment === p.id;
+                const isRefundRow = (p as any).isRefund === true;
+                const isRefundingRow = isRefunding === p.id;
                 return (
-                  <View key={p.id} style={[styles.paymentRow, isLast && { borderBottomWidth: 0 }]}>
+                  <View key={p.id} style={[styles.paymentRow, isLast && { borderBottomWidth: 0 }, isRefundRow && { backgroundColor: '#fef2f2' }]}>
                     <View style={styles.paymentLeft}>
-                      <Text style={styles.paymentAmount}>{formatInvoiceCurrency(p.amount)}</Text>
+                      <Text style={[styles.paymentAmount, isRefundRow && { color: '#dc2626' }]}>
+                        {isRefundRow ? '-' : ''}{formatInvoiceCurrency(p.amount)}
+                      </Text>
                       <View style={styles.paymentMeta}>
-                        <View style={[styles.methodBadge, p.isStripePayment && styles.methodBadgeStripe]}>
-                          <Text style={[styles.methodBadgeText, p.isStripePayment && styles.methodBadgeTextStripe]}>
-                            {p.isStripePayment ? 'Stripe' : formatPaymentMethodLabel(p.method)}
+                        <View style={[styles.methodBadge, p.isStripePayment && styles.methodBadgeStripe, isRefundRow && { backgroundColor: '#fee2e2' }]}>
+                          <Text style={[styles.methodBadgeText, p.isStripePayment && styles.methodBadgeTextStripe, isRefundRow && { color: '#dc2626' }]}>
+                            {isRefundRow ? 'Refund' : p.isStripePayment ? 'Stripe' : formatPaymentMethodLabel(p.method)}
                           </Text>
                         </View>
                         <Text style={styles.paymentDate}>{formatPaymentDate(p.paidAt)}</Text>
                       </View>
                       {p.referenceNumber ? <Text style={styles.paymentRef}>Ref: {p.referenceNumber}</Text> : null}
+                      {p.notes ? <Text style={styles.paymentRef}>{p.notes}</Text> : null}
                     </View>
-                    {!p.isStripePayment && (
-                      <TouchableOpacity
-                        style={styles.deletePayBtn}
-                        onPress={() => handleDeletePayment(p.id)}
-                        disabled={isDeleting}
-                      >
-                        {isDeleting ? (
-                          <ActivityIndicator size="small" color="#dc2626" />
-                        ) : (
-                          <Trash2 size={16} color="#dc2626" />
-                        )}
-                      </TouchableOpacity>
-                    )}
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      {!isRefundRow && !p.isStripePayment && (
+                        <TouchableOpacity
+                          onPress={() => handleRefundPayment(p)}
+                          disabled={isRefundingRow}
+                          style={styles.deletePayBtn}
+                        >
+                          {isRefundingRow
+                            ? <ActivityIndicator size="small" color="#f59e0b" />
+                            : <RotateCcw size={14} color="#f59e0b" />
+                          }
+                        </TouchableOpacity>
+                      )}
+                      {!isRefundRow && !p.isStripePayment && (
+                        <TouchableOpacity
+                          style={styles.deletePayBtn}
+                          onPress={() => handleDeletePayment(p.id)}
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? (
+                            <ActivityIndicator size="small" color="#dc2626" />
+                          ) : (
+                            <Trash2 size={16} color="#dc2626" />
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                 );
               })}

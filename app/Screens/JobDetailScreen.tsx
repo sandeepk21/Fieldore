@@ -8,6 +8,7 @@ import {
   Camera,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   Clock,
   FileText,
@@ -32,6 +33,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  KeyboardAvoidingView,
   Linking,
   Modal,
   PanResponder,
@@ -85,6 +87,24 @@ import {
   getWorkerInitials,
 } from '@/src/services/workerService';
 import {
+  CATEGORY_COLORS,
+  EXPENSE_CATEGORIES,
+  ExpenseResponse,
+  CreateExpenseRequest,
+  createExpenseApi,
+  deleteExpenseApi,
+  formatExpenseCategoryLabel,
+  formatExpenseDate,
+  getExpensesApi,
+  updateExpenseApi,
+} from '@/src/services/expenseService';
+import { getInvoiceByJobIdApi, formatInvoiceCurrency } from '@/src/services/invoiceService';
+import {
+  WEB_PRICING_URL,
+  cleanGateMessage,
+  isSubscriptionGateError,
+} from '@/src/services/subscriptionService';
+import {
   DURATION_OPTIONS,
   JOB_PRIORITY_OPTIONS,
   JOB_STATUS_OPTIONS,
@@ -93,7 +113,7 @@ import {
   JobStatus,
 } from '@/src/utils/jobValidation';
 
-type TabType = 'Checklist' | 'Items' | 'Photos' | 'Notes';
+type TabType = 'Checklist' | 'Items' | 'Photos' | 'Notes' | 'Expenses';
 
 type JobLineItem = {
   id?: string;
@@ -604,6 +624,17 @@ const JobDetailScreen: React.FC = () => {
   const [workerSearch, setWorkerSearch] = useState('');
   const [isAssignSaving, setIsAssignSaving] = useState(false);
 
+  // Expense state
+  const [jobExpenses, setJobExpenses] = useState<ExpenseResponse[]>([]);
+  const [isExpensesLoading, setIsExpensesLoading] = useState(false);
+  const [jobInvoiceTotal, setJobInvoiceTotal] = useState<number | null>(null);
+  const [editingExpense, setEditingExpense] = useState<ExpenseResponse | null>(null);
+  const [expForm, setExpForm] = useState({ description: '', amount: '', category: 'other', expenseDate: new Date().toISOString().split('T')[0], vendorName: '', referenceNumber: '' });
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [showExpCategoryModal, setShowExpCategoryModal] = useState(false);
+  const [isSavingExpense, setIsSavingExpense] = useState(false);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
+
   useEffect(() => {
     if (activeSheet === 'date') {
       setIsChoosingMonthYear(false);
@@ -656,6 +687,88 @@ const JobDetailScreen: React.FC = () => {
       loadJob('initial');
     }, [loadJob])
   );
+
+  const loadJobExpenses = useCallback(async () => {
+    if (!jobId) return;
+    setIsExpensesLoading(true);
+    try {
+      const [expenses, invoice] = await Promise.all([
+        getExpensesApi({ jobId }),
+        getInvoiceByJobIdApi(jobId).catch(() => null),
+      ]);
+      setJobExpenses(expenses);
+      setJobInvoiceTotal(invoice?.totalAmount ?? null);
+    } catch {
+      // silently fail — tab shows empty state
+    } finally {
+      setIsExpensesLoading(false);
+    }
+  }, [jobId]);
+
+  useEffect(() => {
+    if (activeTab === 'Expenses') loadJobExpenses();
+  }, [activeTab, loadJobExpenses]);
+
+  const openAddExpense = () => {
+    setEditingExpense(null);
+    setExpForm({ description: '', amount: '', category: 'other', expenseDate: new Date().toISOString().split('T')[0], vendorName: '', referenceNumber: '' });
+    setShowExpenseForm(true);
+  };
+
+  const openEditExpense = (e: ExpenseResponse) => {
+    setEditingExpense(e);
+    setExpForm({ description: e.description, amount: String(e.amount), category: e.category, expenseDate: e.expenseDate, vendorName: e.vendorName || '', referenceNumber: e.referenceNumber || '' });
+    setShowExpenseForm(true);
+  };
+
+  const handleSaveExpense = async () => {
+    const amount = parseFloat(expForm.amount);
+    if (!expForm.description.trim()) { Alert.alert('Validation', 'Description is required.'); return; }
+    if (!expForm.amount || isNaN(amount) || amount <= 0) { Alert.alert('Validation', 'Enter a valid amount.'); return; }
+    setIsSavingExpense(true);
+    try {
+      const payload: CreateExpenseRequest = {
+        category: expForm.category,
+        description: expForm.description.trim(),
+        amount,
+        expenseDate: expForm.expenseDate,
+        jobId,
+        vendorName: expForm.vendorName.trim() || null,
+        referenceNumber: expForm.referenceNumber.trim() || null,
+      };
+      if (editingExpense) {
+        await updateExpenseApi(editingExpense.id, payload);
+      } else {
+        await createExpenseApi(payload);
+      }
+      setShowExpenseForm(false);
+      await loadJobExpenses();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to save expense.');
+    } finally {
+      setIsSavingExpense(false);
+    }
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    Alert.alert('Delete Expense', 'Remove this expense?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          setDeletingExpenseId(id);
+          try {
+            await deleteExpenseApi(id);
+            await loadJobExpenses();
+          } catch (e: any) {
+            Alert.alert('Error', e?.message || 'Failed to delete.');
+          } finally {
+            setDeletingExpenseId(null);
+          }
+        },
+      },
+    ]);
+  };
 
   useEffect(() => {
     const fetchCountries = async () => {
@@ -1008,6 +1121,17 @@ ${markerScript}
     });
   };
 
+  const promptUpgrade = (message?: string) => {
+    Alert.alert(
+      'Upgrade required',
+      cleanGateMessage(message),
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Upgrade', onPress: () => Linking.openURL(WEB_PRICING_URL) },
+      ],
+    );
+  };
+
   const handleStatusUpdate = async () => {
     if (!job?.id) return;
 
@@ -1025,7 +1149,11 @@ ${markerScript}
       setJob(updated);
       setError('');
     } catch (updateError: any) {
-      setError(updateError?.message || 'Failed to update job status.');
+      if (isSubscriptionGateError(updateError?.message)) {
+        promptUpgrade(updateError.message);
+      } else {
+        setError(updateError?.message || 'Failed to update job status.');
+      }
     } finally {
       setIsStatusUpdating(false);
     }
@@ -1047,7 +1175,11 @@ ${markerScript}
       setJob(updated);
       setError('');
     } catch (statusError: any) {
-      setError(statusError?.message || 'Failed to update job status.');
+      if (isSubscriptionGateError(statusError?.message)) {
+        promptUpgrade(statusError.message);
+      } else {
+        setError(statusError?.message || 'Failed to update job status.');
+      }
     } finally {
       setIsStatusUpdating(false);
     }
@@ -1740,14 +1872,16 @@ ${markerScript}
             </View>
           ) : null}
 
-          <View style={styles.tabBar}>
-            {(['Checklist', 'Items', 'Photos', 'Notes'] as TabType[]).map(tab => (
-              <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={styles.tabItem}>
-                <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
-                {activeTab === tab ? <View style={styles.tabIndicator} /> : null}
-              </TouchableOpacity>
-            ))}
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} bounces={false}>
+            <View style={styles.tabBar}>
+              {(['Checklist', 'Items', 'Photos', 'Notes', 'Expenses'] as TabType[]).map(tab => (
+                <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={styles.tabItem}>
+                  <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
+                  {activeTab === tab ? <View style={styles.tabIndicator} /> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
 
           <View style={styles.contentPadding}>
             {activeTab === 'Checklist' ? (
@@ -2021,6 +2155,86 @@ ${markerScript}
                     </TouchableOpacity>
                   </View>
                 ) : null}
+              </View>
+            ) : null}
+
+            {activeTab === 'Expenses' ? (
+              <View style={styles.expensesSection}>
+                {/* Profit card */}
+                {(() => {
+                  const totalExp = jobExpenses.reduce((s, e) => s + e.amount, 0);
+                  const profit = jobInvoiceTotal !== null ? jobInvoiceTotal - totalExp : null;
+                  return (
+                    <View style={styles.profitCard}>
+                      <View style={styles.profitCardItem}>
+                        <Text style={styles.profitCardLabel}>Expenses</Text>
+                        <Text style={[styles.profitCardValue, { color: '#dc2626' }]}>{formatInvoiceCurrency(totalExp)}</Text>
+                      </View>
+                      <View style={styles.profitCardDivider} />
+                      <View style={styles.profitCardItem}>
+                        <Text style={styles.profitCardLabel}>Invoice</Text>
+                        <Text style={styles.profitCardValue}>{jobInvoiceTotal !== null ? formatInvoiceCurrency(jobInvoiceTotal) : '—'}</Text>
+                      </View>
+                      <View style={styles.profitCardDivider} />
+                      <View style={styles.profitCardItem}>
+                        <Text style={styles.profitCardLabel}>Net Profit</Text>
+                        <Text style={[styles.profitCardValue, { color: profit !== null ? (profit >= 0 ? '#059669' : '#dc2626') : '#94a3b8' }]}>
+                          {profit !== null ? formatInvoiceCurrency(profit) : '—'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+
+                {/* Add button */}
+                <TouchableOpacity style={styles.expAddBtn} onPress={openAddExpense}>
+                  <Plus size={15} color="#2563eb" />
+                  <Text style={styles.expAddBtnText}>Add Expense</Text>
+                </TouchableOpacity>
+
+                {/* List */}
+                {isExpensesLoading ? (
+                  <ActivityIndicator size="small" color="#2563eb" style={{ marginTop: 24 }} />
+                ) : jobExpenses.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyCardTitle}>No expenses yet</Text>
+                    <Text style={styles.emptyCardText}>Log materials, fuel, and labour costs for this job.</Text>
+                  </View>
+                ) : (
+                  <View style={styles.expenseList}>
+                    {jobExpenses.map((exp, idx) => {
+                      const colors = CATEGORY_COLORS[exp.category] ?? CATEGORY_COLORS.other;
+                      const isDeleting = deletingExpenseId === exp.id;
+                      const isLast = idx === jobExpenses.length - 1;
+                      return (
+                        <View key={exp.id} style={[styles.expenseRow, isLast && { borderBottomWidth: 0 }]}>
+                          <View style={[styles.expCatDot, { backgroundColor: colors.bg }]}>
+                            <Text style={[styles.expCatDotText, { color: colors.text }]}>
+                              {formatExpenseCategoryLabel(exp.category).charAt(0)}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.expDesc}>{exp.description}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                              <View style={[styles.expCatBadge, { backgroundColor: colors.bg }]}>
+                                <Text style={[styles.expCatBadgeText, { color: colors.text }]}>{formatExpenseCategoryLabel(exp.category)}</Text>
+                              </View>
+                              <Text style={styles.expDate}>{formatExpenseDate(exp.expenseDate)}</Text>
+                            </View>
+                            {exp.vendorName ? <Text style={styles.expVendor}>{exp.vendorName}</Text> : null}
+                          </View>
+                          <Text style={styles.expAmount}>{formatInvoiceCurrency(exp.amount)}</Text>
+                          <TouchableOpacity style={styles.expActionBtn} onPress={() => openEditExpense(exp)}>
+                            <Package size={14} color="#64748b" />
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.expActionBtn} onPress={() => handleDeleteExpense(exp.id)} disabled={isDeleting}>
+                            {isDeleting ? <ActivityIndicator size="small" color="#dc2626" /> : <Trash2 size={14} color="#dc2626" />}
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             ) : null}
 
@@ -2359,6 +2573,90 @@ ${markerScript}
               </TouchableOpacity>
             </View>
           </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Expense Category Picker — full-screen modal */}
+      <Modal visible={showExpCategoryModal} animationType="slide" onRequestClose={() => setShowExpCategoryModal(false)}>
+        <SafeAreaView style={styles.expFsOverlay}>
+          <View style={styles.expFsContent}>
+            <View style={styles.expFsHeader}>
+              <Text style={styles.expFsTitle}>Select Category</Text>
+              <TouchableOpacity onPress={() => setShowExpCategoryModal(false)} style={styles.expFsCloseBtn}>
+                <X size={20} color="#0f172a" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {EXPENSE_CATEGORIES.map(c => (
+                <TouchableOpacity
+                  key={c.value}
+                  style={styles.expFsItem}
+                  onPress={() => { setExpForm(f => ({ ...f, category: c.value })); setShowExpCategoryModal(false); }}
+                >
+                  <View style={styles.expFsItemContent}>
+                    <Text style={styles.expFsItemTitle}>{c.label}</Text>
+                    <Text style={styles.expFsItemSub}>{expForm.category === c.value ? 'Selected' : 'Tap to choose'}</Text>
+                  </View>
+                  {expForm.category === c.value && (
+                    <View style={styles.expFsCheckCircle}>
+                      <Check size={14} color="white" strokeWidth={4} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Expense Add / Edit — full-screen modal */}
+      <Modal visible={showExpenseForm} animationType="slide" onRequestClose={() => setShowExpenseForm(false)}>
+        <SafeAreaView style={styles.expFsOverlay}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.expFsContent}>
+              <View style={styles.expFsHeader}>
+                <Text style={styles.expFsTitle}>{editingExpense ? 'Edit Expense' : 'Add Expense'}</Text>
+                <TouchableOpacity onPress={() => setShowExpenseForm(false)} style={styles.expFsCloseBtn}>
+                  <X size={20} color="#0f172a" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Description *</Text>
+                  <TextInput style={styles.formInput} value={expForm.description} onChangeText={v => setExpForm(f => ({ ...f, description: v }))} placeholder="e.g. Copper pipes, fuel to site" placeholderTextColor="#94a3b8" />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Amount *</Text>
+                  <TextInput style={styles.formInput} value={expForm.amount} onChangeText={v => setExpForm(f => ({ ...f, amount: v }))} placeholder="0.00" keyboardType="decimal-pad" placeholderTextColor="#94a3b8" />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Category *</Text>
+                  <TouchableOpacity style={styles.formSelect} onPress={() => setShowExpCategoryModal(true)}>
+                    <Text style={styles.formSelectText}>{EXPENSE_CATEGORIES.find(c => c.value === expForm.category)?.label ?? 'Select category'}</Text>
+                    <ChevronDown size={16} color="#64748b" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Date (YYYY-MM-DD) *</Text>
+                  <TextInput style={styles.formInput} value={expForm.expenseDate} onChangeText={v => setExpForm(f => ({ ...f, expenseDate: v }))} placeholder="2025-01-01" placeholderTextColor="#94a3b8" />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Vendor / Supplier</Text>
+                  <TextInput style={styles.formInput} value={expForm.vendorName} onChangeText={v => setExpForm(f => ({ ...f, vendorName: v }))} placeholder="e.g. Shell, Home Depot" placeholderTextColor="#94a3b8" />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Reference / Bill No.</Text>
+                  <TextInput style={styles.formInput} value={expForm.referenceNumber} onChangeText={v => setExpForm(f => ({ ...f, referenceNumber: v }))} placeholder="Receipt number" placeholderTextColor="#94a3b8" />
+                </View>
+                <TouchableOpacity style={[styles.expFsSaveBtn, isSavingExpense && { opacity: 0.6 }]} onPress={handleSaveExpense} disabled={isSavingExpense}>
+                  {isSavingExpense
+                    ? <ActivityIndicator size="small" color="white" />
+                    : <Text style={styles.expFsSaveBtnText}>{editingExpense ? 'Save Changes' : 'Add Expense'}</Text>
+                  }
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
 
@@ -2818,6 +3116,7 @@ ${markerScript}
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 };
@@ -3058,8 +3357,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   inlineErrorText: { fontSize: 12, color: '#b91c1c', fontWeight: '700' },
-  tabBar: { flexDirection: 'row', paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  tabItem: { flex: 1, paddingVertical: 16, alignItems: 'center' },
+  tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  tabItem: { paddingVertical: 14, paddingHorizontal: 18, alignItems: 'center', position: 'relative' },
   tabText: { fontSize: 13, fontWeight: '900', color: '#cbd5e1' },
   tabTextActive: { color: '#2563eb' },
   tabIndicator: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: '#2563eb', borderRadius: 3 },
@@ -4047,6 +4346,41 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748b',
   },
+
+  // Expenses tab
+  expensesSection: { gap: 12 },
+  profitCard: { flexDirection: 'row', backgroundColor: '#f8fafc', borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 4 },
+  profitCardItem: { flex: 1, alignItems: 'center' },
+  profitCardDivider: { width: 1, backgroundColor: '#e2e8f0', marginHorizontal: 4 },
+  profitCardLabel: { fontSize: 11, fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 },
+  profitCardValue: { fontSize: 15, fontWeight: '800', color: '#0f172a' },
+  expAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: '#eff6ff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  expAddBtnText: { fontSize: 14, fontWeight: '600', color: '#2563eb' },
+  expenseList: { borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden', backgroundColor: '#fff' },
+  expenseRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  expCatDot: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  expCatDotText: { fontSize: 14, fontWeight: '800' },
+  expDesc: { fontSize: 13, fontWeight: '600', color: '#0f172a' },
+  expCatBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  expCatBadgeText: { fontSize: 10, fontWeight: '600' },
+  expDate: { fontSize: 11, color: '#94a3b8' },
+  expVendor: { fontSize: 11, color: '#64748b', marginTop: 2 },
+  expAmount: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
+  expActionBtn: { padding: 5 },
+
+  // Expense full-screen modals (matches CreateJobScreen SelectionModal pattern)
+  expFsOverlay: { flex: 1, backgroundColor: '#ffffff' },
+  expFsContent: { flex: 1, padding: 24 },
+  expFsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  expFsTitle: { fontSize: 24, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 },
+  expFsCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  expFsItem: { width: '100%', padding: 20, backgroundColor: '#f8fafc', borderRadius: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center' },
+  expFsItemContent: { flex: 1, paddingRight: 16 },
+  expFsItemTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  expFsItemSub: { fontSize: 12, fontWeight: '600', color: '#94a3b8', marginTop: 2 },
+  expFsCheckCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' },
+  expFsSaveBtn: { backgroundColor: '#2563eb', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 32 },
+  expFsSaveBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '900' },
 });
 
 export default JobDetailScreen;

@@ -32,5 +32,8 @@ Field-service app for service providers (cleaning, landscaping, plumbing, etc.).
 ## Commands
 - `npx expo start` (also `--android` / `--ios` / `--web`); `npm run lint`; `npx orval` to regenerate the API client.
 
+## Subscription gating (added 2026-07)
+`src/services/subscriptionService.ts` (direct axios — these endpoints aren't in the orval client) + `src/context/SubscriptionContext.tsx` (`useSubscription()`, wraps app in `_layout.tsx`) + `app/Screens/SubscriptionScreen.tsx`. **The app never processes payments** — the upgrade CTA and job-limit dialog open the web pricing page (`WEB_PRICING_URL`). Completing a job can return a typed `SUBSCRIPTION_LIMIT_REACHED`/`SUBSCRIPTION_INACTIVE` error → `isSubscriptionGateError()` → upgrade `Alert` (see `JobDetailScreen`). Settings' Subscription row shows real plan/status and routes to `SubscriptionScreen`. Web app + full spec: `docs/subscription/PLAN.md`, web at `d:\Developer\web`.
+
 ## Roadmap & memory
 Active production roadmap: `C:\Users\sande\.claude\plans\please-scan-my-app-abundant-elephant.md`. Project facts/decisions live in Claude memory (`MEMORY.md` index).

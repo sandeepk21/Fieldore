@@ -46,7 +46,7 @@ interface CRMItem {
  */
 const CustomersIllustration = () => {
   const items: CRMItem[] = [
-    { name: "Sarah Johnson", job: "Full Rewire", icon: "SJ", color: "#2563EB" },
+    { name: "Sarah Johnson", job: "Full Rewire", icon: "SJ", color: "#2563eb" },
     { name: "Mike's Cafe", job: "Leak Repair", icon: "MC", color: "#10B981" },
     { name: "Emma Davis", job: "Garden Light", icon: "ED", color: "#F59E0B" }
   ];
@@ -156,8 +156,8 @@ const screens: ScreenContent[] = [
     id: 0,
     title: "Manage Your\nCustomers",
     description: "Store all your clients and job history in one place — always at your fingertips.",
-    accent: "#2563EB",
-    accentLight: "#EFF6FF",
+    accent: "#2563eb",
+    accentLight: "#eff6ff",
     Illustration: CustomersIllustration
   },
   {
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
   },
   getStartedBtn: {
     height: 72,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2563eb',
     borderRadius: 24,
     flexDirection: 'row',
     justifyContent: 'center',

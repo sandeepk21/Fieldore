@@ -49,7 +49,7 @@ const api = getFieldoreAPI();
 const PAGE_SIZE = 10;
 const STATUS_FILTERS: StatusFilter[] = ['All', 'Active', 'Inactive'];
 const TYPE_FILTERS: TypeFilter[] = ['All', 'Residential', 'Commercial'];
-const AVATAR_COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#1d4ed8', '#1e40af', '#0ea5e9'];
+const AVATAR_COLORS = ['#2563eb', '#2563eb', '#60a5fa', '#1d4ed8', '#1d4ed8', '#0ea5e9'];
 
 const formatDate = (value?: string) => {
   if (!value) return 'N/A';

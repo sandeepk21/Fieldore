@@ -132,7 +132,7 @@ const STATUS_COLORS = {
   slate: { bg: '#f8fafc', text: '#475569', border: '#cbd5e1', icon: '#64748b' },
   green: { bg: '#f0fdf4', text: '#16a34a', border: '#86efac', icon: '#22c55e' },
   red: { bg: '#fef2f2', text: '#dc2626', border: '#fca5a5', icon: '#ef4444' },
-  blue: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', icon: '#3b82f6' },
+  blue: { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe', icon: '#2563eb' },
   amber: { bg: '#fffbeb', text: '#d97706', border: '#fde68a', icon: '#f59e0b' },
 };
 

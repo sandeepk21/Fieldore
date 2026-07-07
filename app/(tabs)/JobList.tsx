@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateMonth: { fontSize: 11, fontWeight: '800', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dateMonth: { fontSize: 11, fontWeight: '800', color: '#2563eb', textTransform: 'uppercase', letterSpacing: 0.5 },
   dateDay: { fontSize: 22, fontWeight: '900', color: '#1e3a8a', marginTop: -2 },
 
   cardMain: { flex: 1, gap: 4 },

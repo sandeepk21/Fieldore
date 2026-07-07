@@ -6,6 +6,7 @@ import {
   UpdateInvoiceStatusRequest,
   getFieldoreAPI,
 } from '@/src/api/generated';
+import apiClient from '@/src/api/axiosInstance';
 import { formatCurrency } from '@/src/utils/currency';
 
 const api = getFieldoreAPI();
@@ -184,6 +185,17 @@ export const updateInvoiceStatusApi = async (
     return normalizeInvoiceResponse(unwrapRequired(response.data, 'Failed to update invoice status'));
   } catch (error: any) {
     throw new Error(getApiErrorMessage(error, 'Something went wrong while updating invoice status'));
+  }
+};
+
+export const getInvoiceByJobIdApi = async (jobId: string): Promise<InvoiceResponse | null> => {
+  try {
+    const res = await apiClient.get(`/api/Invoices/byJob/${jobId}`);
+    const result = res.data as ApiEnvelope<InvoiceResponse>;
+    if (!result.success) throw new Error(result.message || 'Failed to fetch job invoice');
+    return result.data ?? null;
+  } catch (error: any) {
+    throw new Error(getApiErrorMessage(error, 'Failed to fetch job invoice'));
   }
 };
 

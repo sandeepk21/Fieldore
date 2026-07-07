@@ -868,6 +868,8 @@ export interface InvoiceResponse {
   billingAddress?: InvoiceAddressResponse;
   customer?: InvoiceCustomerSummaryResponse;
   /** @nullable */
+  publicToken?: string | null;
+  /** @nullable */
   lineItems?: InvoiceLineItemResponse[] | null;
   /** @nullable */
   payments?: PaymentRecordResponse[] | null;
@@ -1131,6 +1133,9 @@ export interface PaymentRecordResponse {
   /** @nullable */
   notes?: string | null;
   isStripePayment?: boolean;
+  isRefund?: boolean;
+  /** @nullable */
+  refundedPaymentId?: string | null;
   createdAt?: string;
 }
 
@@ -1146,6 +1151,9 @@ export interface PaymentResponse {
   /** @nullable */
   notes?: string | null;
   isStripePayment?: boolean;
+  isRefund?: boolean;
+  /** @nullable */
+  refundedPaymentId?: string | null;
   createdAt?: string;
 }
 
@@ -1215,6 +1223,13 @@ export interface RecordPaymentRequest {
   notes?: string | null;
 }
 
+export interface RecordRefundRequest {
+  paymentId?: string;
+  amount?: number;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface ReorderJobChecklistRequest {
   /** @nullable */
   checklistItemIds?: string[] | null;
@@ -1233,6 +1248,23 @@ export interface ReplaceJobChecklistRequest {
 export interface ReplaceJobLineItemsRequest {
   /** @nullable */
   lineItems?: JobLineItemRequest[] | null;
+}
+
+export interface SendInvoiceResponse {
+  invoiceId?: string;
+  /** @nullable */
+  invoiceNumber?: string | null;
+  publicToken?: string;
+  /** @nullable */
+  publicUrl?: string | null;
+}
+
+export interface SendInvoiceResponseApiResponse {
+  success?: boolean;
+  statusCode?: number;
+  /** @nullable */
+  message?: string | null;
+  data?: SendInvoiceResponse;
 }
 
 export interface ServiceCatalogItemResponse {
@@ -1546,6 +1578,10 @@ export interface WorkerResponseListApiResponse {
   data?: WorkerResponse[] | null;
 }
 
+export type GetApiAnalyticsSummaryParams = {
+period?: string;
+};
+
 export type PostApiEstimatesGetAllEstimatesParams = {
 PageNumber?: number;
 PageSize?: number;
@@ -1603,6 +1639,10 @@ countryId?: string;
 countryCode?: string;
 };
 
+export type GetInvoiceTokenParams = {
+paid?: boolean;
+};
+
 export type PostApiServiceCatalogGetAllItemsParams = {
 PageNumber?: number;
 PageSize?: number;
@@ -1617,6 +1657,16 @@ Search?: string;
 };
 
 export const getFieldoreAPI = () => {
+const getApiAnalyticsSummary = <TData = AxiosResponse<void>>(
+    params?: GetApiAnalyticsSummaryParams, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Analytics/summary`,{
+    ...options,
+        params: {...params, ...options?.params},}
+    );
+  }
+
 const postApiAuthLogin = <TData = AxiosResponse<AuthResponseApiResponse>>(
     loginRequest: LoginRequest, options?: AxiosRequestConfig
  ): Promise<TData> => {
@@ -1702,6 +1752,14 @@ const deleteApiCustomersDeleteCustomerCustomerId = <TData = AxiosResponse<Delete
  ): Promise<TData> => {
     return axios.delete(
       `/api/Customers/delete-customer/${customerId}`,options
+    );
+  }
+
+const getApiDashboardSummary = <TData = AxiosResponse<void>>(
+     options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Dashboard/summary`,options
     );
   }
 
@@ -1873,6 +1931,14 @@ const postApiInvoicesGetAllInvoices = <TData = AxiosResponse<InvoiceResponsePage
     );
   }
 
+const getApiInvoicesByJobJobId = <TData = AxiosResponse<void>>(
+    jobId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/api/Invoices/byJob/${jobId}`,options
+    );
+  }
+
 const getApiInvoicesGetByIdInvoiceId = <TData = AxiosResponse<InvoiceResponseApiResponse>>(
     invoiceId: string, options?: AxiosRequestConfig
  ): Promise<TData> => {
@@ -1906,6 +1972,14 @@ const deleteApiInvoicesDeleteInvoiceInvoiceId = <TData = AxiosResponse<DeleteInv
  ): Promise<TData> => {
     return axios.delete(
       `/api/Invoices/delete-invoice/${invoiceId}`,options
+    );
+  }
+
+const postApiInvoicesSendInvoiceId = <TData = AxiosResponse<SendInvoiceResponseApiResponse>>(
+    invoiceId: string, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Invoices/send/${invoiceId}`,undefined,options
     );
   }
 
@@ -2108,6 +2182,16 @@ const deleteApiPaymentsInvoiceIdPaymentId = <TData = AxiosResponse<PaymentRespon
     );
   }
 
+const postApiPaymentsRefundInvoiceId = <TData = AxiosResponse<PaymentResponseApiResponse>>(
+    invoiceId: string,
+    recordRefundRequest: RecordRefundRequest, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.post(
+      `/api/Payments/refund/${invoiceId}`,
+      recordRefundRequest,options
+    );
+  }
+
 const getApiPublicQuotesToken = <TData = AxiosResponse<PublicEstimateResponseApiResponse>>(
     token: string, options?: AxiosRequestConfig
  ): Promise<TData> => {
@@ -2153,6 +2237,17 @@ const postQuoteTokenReject = <TData = AxiosResponse<void>>(
  ): Promise<TData> => {
     return axios.post(
       `/quote/${token}/reject`,undefined,options
+    );
+  }
+
+const getInvoiceToken = <TData = AxiosResponse<void>>(
+    token: string,
+    params?: GetInvoiceTokenParams, options?: AxiosRequestConfig
+ ): Promise<TData> => {
+    return axios.get(
+      `/invoice/${token}`,{
+    ...options,
+        params: {...params, ...options?.params},}
     );
   }
 
@@ -2294,7 +2389,8 @@ const putApiWorkersDeactivateWorkerId = <TData = AxiosResponse<WorkerResponseApi
     );
   }
 
-return {postApiAuthLogin,postApiAuthSignup,postApiAuthBusinessRegister,getApiAuthGetBusinessDetails,postApiAuthForgotPassword,postApiCustomersCreateCustomer,postApiCustomersGetAllCustomers,getApiCustomersGetByIdCustomerId,putApiCustomersUpdateCustomerCustomerId,deleteApiCustomersDeleteCustomerCustomerId,postApiEstimatesCreateEstimate,postApiEstimatesGetAllEstimates,getApiEstimatesGetByIdEstimateId,putApiEstimatesUpdateEstimateEstimateId,patchApiEstimatesUpdateStatusEstimateId,postApiEstimatesSendEstimateId,postApiEstimatesConvertToJobEstimateId,deleteApiEstimatesDeleteEstimateEstimateId,postApiEstimatesAddAttachmentEstimateId,deleteApiEstimatesDeleteAttachmentEstimateIdAttachmentId,getApiExpensesGetAll,getApiExpensesSummary,postApiExpensesCreate,putApiExpensesUpdateExpenseId,deleteApiExpensesExpenseId,getHealthDb,postApiInvoicesCreateInvoice,postApiInvoicesGetAllInvoices,getApiInvoicesGetByIdInvoiceId,putApiInvoicesUpdateInvoiceInvoiceId,patchApiInvoicesUpdateStatusInvoiceId,deleteApiInvoicesDeleteInvoiceInvoiceId,postApiJobsCreateJob,postApiJobsGetAllJobs,getApiJobsGetByIdJobId,putApiJobsUpdateJobJobId,deleteApiJobsDeleteJobJobId,patchApiJobsUpdateStatusJobId,putApiJobsReplaceAssignmentsJobId,putApiJobsReplaceChecklistJobId,putApiJobsReplaceLineItemsJobId,postApiJobsAddNoteJobId,putApiJobsEditNoteJobIdNoteId,deleteApiJobsDeleteNoteJobIdNoteId,postApiJobsAddPhotoJobId,deleteApiJobsDeletePhotoJobIdPhotoId,putApiJobsReorderChecklistJobId,getApiLocationsCountries,getApiLocationsStates,postApiPaymentsRecordInvoiceId,getApiPaymentsInvoiceInvoiceId,deleteApiPaymentsInvoiceIdPaymentId,getApiPublicQuotesToken,postApiPublicQuotesTokenAccept,postApiPublicQuotesTokenReject,getQuoteToken,postQuoteTokenAccept,postQuoteTokenReject,postApiServiceCatalogCreateItem,postApiServiceCatalogGetAllItems,getApiServiceCatalogGetByIdItemId,putApiServiceCatalogUpdateItemItemId,deleteApiServiceCatalogDeleteItemItemId,getApiStripeStatus,postApiStripeConnectOnboarding,getApiStripeConnectReturn,getApiStripeConnectRefresh,postApiStripeWebhook,postApiStripeInvoiceTokenCheckout,getApiWorkersGetAll,getApiWorkersGetAssignable,postApiWorkersCreate,putApiWorkersUpdateWorkerId,putApiWorkersDeactivateWorkerId}};
+return {getApiAnalyticsSummary,postApiAuthLogin,postApiAuthSignup,postApiAuthBusinessRegister,getApiAuthGetBusinessDetails,postApiAuthForgotPassword,postApiCustomersCreateCustomer,postApiCustomersGetAllCustomers,getApiCustomersGetByIdCustomerId,putApiCustomersUpdateCustomerCustomerId,deleteApiCustomersDeleteCustomerCustomerId,getApiDashboardSummary,postApiEstimatesCreateEstimate,postApiEstimatesGetAllEstimates,getApiEstimatesGetByIdEstimateId,putApiEstimatesUpdateEstimateEstimateId,patchApiEstimatesUpdateStatusEstimateId,postApiEstimatesSendEstimateId,postApiEstimatesConvertToJobEstimateId,deleteApiEstimatesDeleteEstimateEstimateId,postApiEstimatesAddAttachmentEstimateId,deleteApiEstimatesDeleteAttachmentEstimateIdAttachmentId,getApiExpensesGetAll,getApiExpensesSummary,postApiExpensesCreate,putApiExpensesUpdateExpenseId,deleteApiExpensesExpenseId,getHealthDb,postApiInvoicesCreateInvoice,postApiInvoicesGetAllInvoices,getApiInvoicesByJobJobId,getApiInvoicesGetByIdInvoiceId,putApiInvoicesUpdateInvoiceInvoiceId,patchApiInvoicesUpdateStatusInvoiceId,deleteApiInvoicesDeleteInvoiceInvoiceId,postApiInvoicesSendInvoiceId,postApiJobsCreateJob,postApiJobsGetAllJobs,getApiJobsGetByIdJobId,putApiJobsUpdateJobJobId,deleteApiJobsDeleteJobJobId,patchApiJobsUpdateStatusJobId,putApiJobsReplaceAssignmentsJobId,putApiJobsReplaceChecklistJobId,putApiJobsReplaceLineItemsJobId,postApiJobsAddNoteJobId,putApiJobsEditNoteJobIdNoteId,deleteApiJobsDeleteNoteJobIdNoteId,postApiJobsAddPhotoJobId,deleteApiJobsDeletePhotoJobIdPhotoId,putApiJobsReorderChecklistJobId,getApiLocationsCountries,getApiLocationsStates,postApiPaymentsRecordInvoiceId,getApiPaymentsInvoiceInvoiceId,deleteApiPaymentsInvoiceIdPaymentId,postApiPaymentsRefundInvoiceId,getApiPublicQuotesToken,postApiPublicQuotesTokenAccept,postApiPublicQuotesTokenReject,getQuoteToken,postQuoteTokenAccept,postQuoteTokenReject,getInvoiceToken,postApiServiceCatalogCreateItem,postApiServiceCatalogGetAllItems,getApiServiceCatalogGetByIdItemId,putApiServiceCatalogUpdateItemItemId,deleteApiServiceCatalogDeleteItemItemId,getApiStripeStatus,postApiStripeConnectOnboarding,getApiStripeConnectReturn,getApiStripeConnectRefresh,postApiStripeWebhook,postApiStripeInvoiceTokenCheckout,getApiWorkersGetAll,getApiWorkersGetAssignable,postApiWorkersCreate,putApiWorkersUpdateWorkerId,putApiWorkersDeactivateWorkerId}};
+export type GetApiAnalyticsSummaryResult = AxiosResponse<void>
 export type PostApiAuthLoginResult = AxiosResponse<AuthResponseApiResponse>
 export type PostApiAuthSignupResult = AxiosResponse<AuthResponseApiResponse>
 export type PostApiAuthBusinessRegisterResult = AxiosResponse<AuthResponseApiResponse>
@@ -2305,6 +2401,7 @@ export type PostApiCustomersGetAllCustomersResult = AxiosResponse<CustomerRespon
 export type GetApiCustomersGetByIdCustomerIdResult = AxiosResponse<CustomerResponseApiResponse>
 export type PutApiCustomersUpdateCustomerCustomerIdResult = AxiosResponse<CustomerResponseApiResponse>
 export type DeleteApiCustomersDeleteCustomerCustomerIdResult = AxiosResponse<DeleteCustomerResponseApiResponse>
+export type GetApiDashboardSummaryResult = AxiosResponse<void>
 export type PostApiEstimatesCreateEstimateResult = AxiosResponse<EstimateResponseApiResponse>
 export type PostApiEstimatesGetAllEstimatesResult = AxiosResponse<EstimateResponsePagedResponseApiResponse>
 export type GetApiEstimatesGetByIdEstimateIdResult = AxiosResponse<EstimateResponseApiResponse>
@@ -2323,10 +2420,12 @@ export type DeleteApiExpensesExpenseIdResult = AxiosResponse<void>
 export type GetHealthDbResult = AxiosResponse<void>
 export type PostApiInvoicesCreateInvoiceResult = AxiosResponse<InvoiceResponseApiResponse>
 export type PostApiInvoicesGetAllInvoicesResult = AxiosResponse<InvoiceResponsePagedResponseApiResponse>
+export type GetApiInvoicesByJobJobIdResult = AxiosResponse<void>
 export type GetApiInvoicesGetByIdInvoiceIdResult = AxiosResponse<InvoiceResponseApiResponse>
 export type PutApiInvoicesUpdateInvoiceInvoiceIdResult = AxiosResponse<InvoiceResponseApiResponse>
 export type PatchApiInvoicesUpdateStatusInvoiceIdResult = AxiosResponse<InvoiceResponseApiResponse>
 export type DeleteApiInvoicesDeleteInvoiceInvoiceIdResult = AxiosResponse<DeleteInvoiceResponseApiResponse>
+export type PostApiInvoicesSendInvoiceIdResult = AxiosResponse<SendInvoiceResponseApiResponse>
 export type PostApiJobsCreateJobResult = AxiosResponse<JobResponseApiResponse>
 export type PostApiJobsGetAllJobsResult = AxiosResponse<JobResponsePagedResponseApiResponse>
 export type GetApiJobsGetByIdJobIdResult = AxiosResponse<JobResponseApiResponse>
@@ -2347,12 +2446,14 @@ export type GetApiLocationsStatesResult = AxiosResponse<StateProvinceLookupRespo
 export type PostApiPaymentsRecordInvoiceIdResult = AxiosResponse<PaymentResponseApiResponse>
 export type GetApiPaymentsInvoiceInvoiceIdResult = AxiosResponse<PaymentResponseListApiResponse>
 export type DeleteApiPaymentsInvoiceIdPaymentIdResult = AxiosResponse<PaymentResponseApiResponse>
+export type PostApiPaymentsRefundInvoiceIdResult = AxiosResponse<PaymentResponseApiResponse>
 export type GetApiPublicQuotesTokenResult = AxiosResponse<PublicEstimateResponseApiResponse>
 export type PostApiPublicQuotesTokenAcceptResult = AxiosResponse<PublicEstimateResponseApiResponse>
 export type PostApiPublicQuotesTokenRejectResult = AxiosResponse<PublicEstimateResponseApiResponse>
 export type GetQuoteTokenResult = AxiosResponse<void>
 export type PostQuoteTokenAcceptResult = AxiosResponse<void>
 export type PostQuoteTokenRejectResult = AxiosResponse<void>
+export type GetInvoiceTokenResult = AxiosResponse<void>
 export type PostApiServiceCatalogCreateItemResult = AxiosResponse<ServiceCatalogItemResponseApiResponse>
 export type PostApiServiceCatalogGetAllItemsResult = AxiosResponse<ServiceCatalogItemResponsePagedResponseApiResponse>
 export type GetApiServiceCatalogGetByIdItemIdResult = AxiosResponse<ServiceCatalogItemResponseApiResponse>

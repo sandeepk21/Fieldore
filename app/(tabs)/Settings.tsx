@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import {
+    BarChart2,
     Bell,
     Briefcase,
     ChevronRight,
@@ -10,6 +11,7 @@ import {
     Receipt,
     Settings as SettingsIcon,
     ShieldCheck,
+    UserPlus,
     Users,
     Zap
 } from 'lucide-react-native';
@@ -26,6 +28,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { StripeStatus, getStripeStatusApi, startStripeOnboardingApi } from '@/src/services/paymentService';
+import { useSubscription } from '@/src/context/SubscriptionContext';
+import { getStatusLabel } from '@/src/services/subscriptionService';
 
 // --- Interfaces ---
 interface SettingsItem {
@@ -44,6 +48,11 @@ interface SettingsGroup {
 const Settings: React.FC = () => {
   const [stripeStatus, setStripeStatus] = useState<StripeStatus | null>(null);
   const [stripeLoading, setStripeLoading] = useState(false);
+  const { subscription } = useSubscription();
+
+  const subscriptionDesc = subscription
+    ? `${subscription.planName} · ${getStatusLabel(subscription.status)}`
+    : 'View plan, usage and upgrade';
 
   useEffect(() => {
     getStripeStatusApi()
@@ -81,8 +90,10 @@ const Settings: React.FC = () => {
       label: "BUSINESS & TEAM",
       items: [
         { id: 'users', icon: Users, label: "Users & Team", desc: "Manage permissions and staff", route: "../Screens/TeamScreen" },
+        { id: 'leads', icon: UserPlus, label: "Leads", desc: "Track and convert new enquiries", route: "../Screens/LeadListScreen" },
         { id: 'services', icon: Briefcase, label: "Service Catalog", desc: "Saved services & default prices", route: "../Screens/ServiceCatalogScreen" },
         { id: 'expenses', icon: Receipt, label: "Expenses & Profit", desc: "Track costs and net profit", route: "../Screens/ExpenseListScreen" },
+        { id: 'analytics', icon: BarChart2, label: "Analytics & Reports", desc: "Revenue, expenses, and job insights", route: "../Screens/AnalyticsScreen" },
         { id: 'stripe', icon: Link, label: "Stripe Payments", desc: stripeDesc },
       ]
     },
@@ -90,7 +101,7 @@ const Settings: React.FC = () => {
       label: "PREFERENCES",
       items: [
         { id: 'notifications', icon: Bell, label: "Notifications", desc: "Push, email, and SMS alerts" },
-        { id: 'subscription', icon: CreditCard, label: "Subscription", desc: "Plan: Pro Annual (Renewing)" },
+        { id: 'subscription', icon: CreditCard, label: "Subscription", desc: subscriptionDesc, route: "../Screens/SubscriptionScreen" },
       ]
     },
     {

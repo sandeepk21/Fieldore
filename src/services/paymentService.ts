@@ -9,6 +9,8 @@ export type PaymentRecord = {
   referenceNumber?: string | null;
   notes?: string | null;
   isStripePayment: boolean;
+  isRefund: boolean;
+  refundedPaymentId?: string | null;
   createdAt: string;
 };
 
@@ -27,11 +29,14 @@ export type StripeStatus = {
 };
 
 export const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'card', label: 'Card' },
+  { value: 'cash',          label: 'Cash' },
+  { value: 'card',          label: 'Card' },
+  { value: 'credit_card',   label: 'Credit Card' },
+  { value: 'debit_card',    label: 'Debit Card' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'check', label: 'Check' },
-  { value: 'other', label: 'Other' },
+  { value: 'online',        label: 'Online' },
+  { value: 'check',         label: 'Check' },
+  { value: 'other',         label: 'Other' },
 ] as const;
 
 type ApiEnvelope<T> = {
@@ -61,6 +66,37 @@ export const recordPaymentApi = async (
     );
   } catch (error: any) {
     throw new Error(getApiErrorMessage(error, 'Failed to record payment'));
+  }
+};
+
+export type SendInvoiceResult = {
+  invoiceId: string;
+  invoiceNumber: string;
+  publicToken: string;
+  publicUrl: string;
+};
+
+export const sendInvoiceApi = async (invoiceId: string): Promise<SendInvoiceResult> => {
+  try {
+    return await unwrapOne<SendInvoiceResult>(
+      apiClient.post(`/api/Invoices/send/${invoiceId}`),
+      'Failed to send invoice'
+    );
+  } catch (error: any) {
+    throw new Error(getApiErrorMessage(error, 'Failed to send invoice'));
+  }
+};
+
+export type RefundRequest = { paymentId: string; amount: number; notes?: string | null };
+
+export const refundPaymentApi = async (invoiceId: string, payload: RefundRequest): Promise<PaymentRecord> => {
+  try {
+    return await unwrapOne<PaymentRecord>(
+      apiClient.post(`/api/Payments/refund/${invoiceId}`, payload),
+      'Failed to record refund'
+    );
+  } catch (error: any) {
+    throw new Error(getApiErrorMessage(error, 'Failed to record refund'));
   }
 };
 

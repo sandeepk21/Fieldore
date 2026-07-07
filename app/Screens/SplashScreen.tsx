@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   topPadding: { height: 100 },
   centerArea: { alignItems: 'center', gap: 24 },
   logoContainer: {
-    shadowColor: '#2563EB',
+    shadowColor: '#2563eb',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.2,
     shadowRadius: 30,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   logoBox: {
     width: 96,
     height: 96,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2563eb',
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     bottom: 0, left: 0,
   },
   brandText: { fontSize: 40, fontWeight: '900', color: '#1e293b' },
-  brandAccent: { color: '#2563EB' },
+  brandAccent: { color: '#2563eb' },
   bottomArea: {
     width: '100%',
     paddingHorizontal: 48,
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     overflow: 'hidden',
   },
-  progressBar: { height: '100%', backgroundColor: '#2563EB' },
+  progressBar: { height: '100%', backgroundColor: '#2563eb' },
   footerInfo: { alignItems: 'center', gap: 4 },
   tagline: { fontSize: 10, fontWeight: '900', color: '#cbd5e1', letterSpacing: 2 },
   version: { fontSize: 10, fontWeight: '700', color: '#94a3b8' },
